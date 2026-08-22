@@ -1,7 +1,9 @@
 const express = require("express");
-const crypto = require("crypto");
+const crypto  = require("crypto");
+const fs      = require("fs");
+const nodePath = require("path");
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: "5mb" }));
@@ -25,7 +27,50 @@ app.use(express.json({ limit: "5mb" }));
 ==================================================
 */
 
-const loaders = new Map();
+/* =================================================
+   PERSISTENCE — Railway Volume at /data
+   Falls back to ./data if volume not mounted
+================================================= */
+
+const DATA_DIR  = fs.existsSync("/data") ? "/data" : nodePath.join(__dirname, "data");
+const DATA_FILE = nodePath.join(DATA_DIR, "scripts.json");
+
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function loadFromDisk() {
+    try {
+        if (fs.existsSync(DATA_FILE)) {
+            const raw = fs.readFileSync(DATA_FILE, "utf8");
+            const obj = JSON.parse(raw);
+            const map = new Map();
+            for (const [k, v] of Object.entries(obj)) {
+                map.set(k, v);
+            }
+            console.log("Loaded " + map.size + " scripts from disk.");
+            return map;
+        }
+    } catch (e) {
+        console.error("Failed to load scripts from disk:", e.message);
+    }
+    return new Map();
+}
+
+function saveToDisk(map) {
+    try {
+        const obj = {};
+        for (const [k, v] of map.entries()) {
+            obj[k] = v;
+        }
+        fs.writeFileSync(DATA_FILE, JSON.stringify(obj, null, 2), "utf8");
+    } catch (e) {
+        console.error("Failed to save scripts to disk:", e.message);
+    }
+}
+
+const loaders = loadFromDisk();
+
 
 /* =================================================
    ID GENERATOR
@@ -468,6 +513,43 @@ textarea:focus {
     margin-bottom: 14px;
 }
 
+.source-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.source-label-row span {
+    color: #aaa4b1;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.btn-upload {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #1e1829;
+    border: 1px solid #302a39;
+    color: #a090b8;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+    user-select: none;
+}
+
+.btn-upload:hover {
+    background: #2b2238;
+    color: #c9a8ff;
+    border-color: #5a3f80;
+}
+
 /* ── BUTTONS ── */
 
 .buttons {
@@ -797,11 +879,23 @@ button:hover {
         </div>
 
         <div class="input-group">
-            <div class="label">Source</div>
+            <div class="label source-label-row">
+                <span>Source</span>
+                <label class="btn-upload" title="Upload .lua or .txt file">
+                    📁 Upload File
+                    <input
+                        type="file"
+                        id="fileUpload"
+                        accept=".lua,.txt"
+                        onchange="handleFileUpload(this)"
+                        style="display:none"
+                    >
+                </label>
+            </div>
             <textarea
                 id="source"
                 spellcheck="false"
-                placeholder="Paste your Luau source here..."
+                placeholder="Paste your Luau source here, or upload a .lua / .txt file..."
             ></textarea>
         </div>
 
@@ -1555,6 +1649,7 @@ app.post(
                     url:         url
                 }
             );
+            saveToDisk(loaders);
 
             const loadstring =
                 `loadstring(game:HttpGet("${url}"))()`;
@@ -1636,6 +1731,7 @@ app.post(
         item.enabled = enabled;
 
         loaders.set(id, item);
+        saveToDisk(loaders);
 
         res.json({ success: true, id, enabled });
     }
@@ -1658,6 +1754,7 @@ app.delete(
         }
 
         loaders.delete(id);
+        saveToDisk(loaders);
 
         res.json({ success: true, id });
     }
