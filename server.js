@@ -190,7 +190,7 @@ function requireAdmin(req, res, next) {
 app.get("/auth/login", (req, res) => {
 
     const params = new URLSearchParams({
-        client_id:     CONFIG.
+        client_id:     CONFIG.DISCORD_CLIENT_ID,
         redirect_uri:  CONFIG.REDIRECT_URI,
         response_type: "code",
         scope:         "identify guilds.members.read",
@@ -215,7 +215,7 @@ app.get("/auth/callback", async (req, res) => {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
-                client_id:     CONFIG.
+                client_id:     CONFIG.DISCORD_CLIENT_ID,
                 client_secret: CONFIG.DISCORD_CLIENT_SECRET,
                 grant_type:    "authorization_code",
                 code:          code,
