@@ -1,11 +1,3 @@
-process.on("uncaughtException", (err) => {
-    console.error("Uncaught Exception:", err);
-});
-
-process.on("unhandledRejection", (reason) => {
-    console.error("Unhandled Rejection:", reason);
-});
-
 const express = require("express");
 const crypto = require("crypto");
 
@@ -19,14 +11,17 @@ app.use(express.json({ limit: "5mb" }));
  KXLuaprotect
 ==================================================
 
- Features:
- - Protect Luau
- - Custom script name
- - Script manager
- - Enable / Disable
- - Delete script
- - Browser protection page
- - Runtime loader
+ Browser:
+   /files/loaders/ID.lua
+          ↓
+   Security page
+   "This script can't be viewed in a browser"
+
+ Runtime request:
+   /files/loaders/ID.lua
+          ↓
+   Protected Luau
+
 ==================================================
 */
 
@@ -37,7 +32,9 @@ const loaders = new Map();
 ================================================= */
 
 function generateId() {
-    return crypto.randomBytes(18).toString("hex");
+    return crypto
+        .randomBytes(18)
+        .toString("hex");
 }
 
 /* =================================================
@@ -91,6 +88,7 @@ function protectLuau(source) {
             }
 
             output += code.slice(i, j);
+
             i = j;
 
             continue;
@@ -119,6 +117,7 @@ function protectLuau(source) {
             }
 
             output += code.slice(i, j);
+
             i = j;
 
             continue;
@@ -145,6 +144,7 @@ function protectLuau(source) {
         }
 
         output += char;
+
         i++;
     }
 
@@ -175,27 +175,13 @@ function protectLuau(source) {
     );
 
     /*
-       Marker
+       Add KXLuaprotect marker
     */
     return (
         "-- KXLuaprotect Protected\n\n" +
         code.trim() +
         "\n"
     );
-}
-
-/* =================================================
-   HTML ESCAPER
-================================================= */
-
-function escapeHtml(value) {
-
-    return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
 }
 
 /* =================================================
@@ -279,7 +265,9 @@ body {
 }
 
 .logo span {
-    color: #9565ff;
+
+    color:
+        #9565ff;
 }
 
 .subtitle {
@@ -328,40 +316,6 @@ body {
         10px;
 }
 
-input {
-
-    width: 100%;
-
-    background:
-        #08080c;
-
-    color:
-        #e8e4ed;
-
-    border:
-        1px solid #302a39;
-
-    border-radius:
-        12px;
-
-    padding:
-        14px;
-
-    outline:
-        none;
-
-    margin-bottom:
-        15px;
-
-    font-size:
-        14px;
-}
-
-input:focus {
-    border-color:
-        #895cff;
-}
-
 textarea {
 
     width:
@@ -403,6 +357,7 @@ textarea {
 }
 
 textarea:focus {
+
     border-color:
         #895cff;
 }
@@ -456,6 +411,7 @@ button {
 }
 
 button:hover {
+
     filter:
         brightness(1.12);
 }
@@ -530,16 +486,19 @@ button:hover {
 @media(max-width:650px) {
 
     .logo {
+
         font-size:
             34px;
     }
 
     textarea {
+
         height:
             300px;
     }
 
     .buttons {
+
         flex-direction:
             column;
     }
@@ -566,16 +525,6 @@ Luau Source Protection
 </div>
 
 <div class="card">
-
-<div class="label">
-SCRIPT NAME
-</div>
-
-<input
-    id="scriptName"
-    maxlength="80"
-    placeholder="Example: KXL Duel"
-/>
 
 <div class="label">
 SOURCE
@@ -666,23 +615,10 @@ async function protectCode() {
             "source"
         ).value;
 
-    const scriptName =
-        document.getElementById(
-            "scriptName"
-        ).value.trim();
-
     const status =
         document.getElementById(
             "status"
         );
-
-    if (!scriptName) {
-
-        status.textContent =
-            "Enter a script name.";
-
-        return;
-    }
 
     if (!source.trim()) {
 
@@ -711,9 +647,6 @@ async function protectCode() {
 
                     body:
                         JSON.stringify({
-                            name:
-                                scriptName,
-
                             source:
                                 source
                         })
@@ -796,10 +729,6 @@ function clearCode() {
     ).value = "";
 
     document.getElementById(
-        "scriptName"
-    ).value = "";
-
-    document.getElementById(
         "result"
     ).style.display =
         "none";
@@ -810,6 +739,7 @@ function clearCode() {
         "Ready.";
 
     currentUrl = "";
+
     currentLoadstring = "";
 }
 
@@ -848,17 +778,14 @@ function browserPage(id, baseUrl) {
 <style>
 
 * {
-    box-sizing:
-        border-box;
+    box-sizing: border-box;
 }
 
 body {
 
-    margin:
-        0;
+    margin: 0;
 
-    min-height:
-        100vh;
+    min-height: 100vh;
 
     background:
         radial-gradient(
@@ -868,8 +795,7 @@ body {
             #020e19 100%
         );
 
-    color:
-        white;
+    color: white;
 
     font-family:
         Arial,
@@ -887,136 +813,6 @@ body {
     padding:
         20px;
 }
-
-/* ===============================
-   TOP LEFT MENU
-================================ */
-
-.menu-wrap {
-
-    position:
-        fixed;
-
-    top:
-        18px;
-
-    left:
-        18px;
-
-    z-index:
-        9999;
-}
-
-.menu-btn {
-
-    width:
-        42px;
-
-    height:
-        42px;
-
-    padding:
-        0;
-
-    border-radius:
-        12px;
-
-    background:
-        rgba(8,20,31,.9);
-
-    border:
-        1px solid #183247;
-
-    color:
-        #c8d9e5;
-
-    font-size:
-        25px;
-
-    line-height:
-        35px;
-}
-
-.menu-btn:hover {
-    background:
-        #102b40;
-}
-
-.menu {
-
-    display:
-        none;
-
-    position:
-        absolute;
-
-    top:
-        50px;
-
-    left:
-        0;
-
-    width:
-        220px;
-
-    background:
-        #06131f;
-
-    border:
-        1px solid #183247;
-
-    border-radius:
-        13px;
-
-    padding:
-        7px;
-
-    box-shadow:
-        0 20px 50px
-        rgba(0,0,0,.5);
-}
-
-.menu-item {
-
-    width:
-        100%;
-
-    text-align:
-        left;
-
-    background:
-        transparent;
-
-    border:
-        0;
-
-    padding:
-        12px;
-
-    border-radius:
-        9px;
-
-    color:
-        #dce8ef;
-
-    cursor:
-        pointer;
-
-    font-size:
-        13px;
-
-    margin:
-        0;
-}
-
-.menu-item:hover {
-    background:
-        #10283a;
-}
-
-/* ===============================
-   MAIN CARD
-================================ */
 
 .card {
 
@@ -1141,7 +937,7 @@ p {
         ellipsis;
 }
 
-.copy-btn {
+button {
 
     width:
         100%;
@@ -1171,7 +967,8 @@ p {
         pointer;
 }
 
-.copy-btn:hover {
+button:hover {
+
     filter:
         brightness(1.1);
 }
@@ -1203,570 +1000,56 @@ p {
         11px;
 }
 
-/* ===============================
-   SCRIPT MANAGER
-================================ */
-
-.manager {
-
-    display:
-        none;
-
-    position:
-        fixed;
-
-    inset:
-        0;
-
-    background:
-        rgba(0,0,0,.72);
-
-    z-index:
-        9998;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    padding:
-        20px;
-}
-
-.manager-card {
-
-    width:
-        min(600px,100%);
-
-    max-height:
-        80vh;
-
-    overflow:
-        auto;
-
-    background:
-        #06131f;
-
-    border:
-        1px solid #183247;
-
-    border-radius:
-        18px;
-
-    padding:
-        20px;
-
-    box-shadow:
-        0 30px 90px
-        rgba(0,0,0,.6);
-}
-
-.manager-head {
-
-    display:
-        flex;
-
-    justify-content:
-        space-between;
-
-    align-items:
-        center;
-
-    margin-bottom:
-        15px;
-}
-
-.manager-title {
-
-    font-size:
-        20px;
-
-    font-weight:
-        800;
-
-    color:
-        #e8f5ff;
-}
-
-.close-btn {
-
-    width:
-        38px;
-
-    height:
-        38px;
-
-    padding:
-        0;
-
-    background:
-        #10283a;
-
-    border:
-        1px solid #1b3a50;
-
-    border-radius:
-        10px;
-
-    font-size:
-        20px;
-}
-
-.script-item {
-
-    background:
-        #081c2b;
-
-    border:
-        1px solid #17364b;
-
-    border-radius:
-        13px;
-
-    padding:
-        14px;
-
-    margin-bottom:
-        10px;
-}
-
-.script-name {
-
-    color:
-        #e5f4ff;
-
-    font-weight:
-            800;
-
-    font-size:
-        14px;
-
-    word-break:
-        break-word;
-}
-
-.script-id {
-
-    color:
-        #587486;
-
-    font-size:
-        10px;
-
-    margin-top:
-        5px;
-}
-
-.script-status {
-
-    font-size:
-        11px;
-
-    margin-top:
-        7px;
-}
-
-.enabled {
-    color:
-        #54df91;
-}
-
-.disabled {
-    color:
-        #ff6575;
-}
-
-.script-actions {
-
-    display:
-        flex;
-
-    gap:
-        7px;
-
-    margin-top:
-        12px;
-}
-
-.action {
-
-    flex:
-        1;
-
-    padding:
-        9px 6px;
-
-    font-size:
-        11px;
-
-    background:
-        #10283a;
-
-    border:
-        1px solid #1a3b52;
-}
-
-.action.delete {
-    background:
-        #38151c;
-
-    border-color:
-        #64222d;
-}
-
-.empty {
-
-    text-align:
-        center;
-
-    color:
-        #60798a;
-
-    padding:
-        35px 10px;
-}
-
 </style>
 
 </head>
 
 <body>
 
-<!-- MENU -->
-
-<div class="menu-wrap">
-
-    <button
-        class="menu-btn"
-        onclick="toggleMenu()"
-    >
-        ⋮
-    </button>
-
-    <div
-        class="menu"
-        id="menu"
-    >
-
-        <button
-            class="menu-item"
-            onclick="openScripts()"
-        >
-            📜 Script
-        </button>
-
-    </div>
-
-</div>
-
-<!-- MAIN -->
-
 <div class="card">
 
-    <div class="icon">
-        🔒
-    </div>
+<div class="icon">
+🔒
+</div>
 
-    <h1>
-        This script can't be viewed in a browser
-    </h1>
+<h1>
+This script can't be viewed in a browser
+</h1>
 
-    <p>
-        For security, the source is only delivered
-        to the runtime. Use the loader below.
-    </p>
+<p>
+For security, the source is only delivered
+to Roblox at runtime. Use the loader below
+in your executor or script.
+</p>
 
-    <div class="loader">
+<div class="loader">
 
-        <div class="loader-title">
-            LOADER
-        </div>
+<div class="loader-title">
+LOADER
+</div>
 
-        <div class="loader-code">
-            ${escapeHtml(loader)}
-        </div>
-
-    </div>
-
-    <button
-        class="copy-btn"
-        onclick="copyLoader()"
-    >
-        Copy loader
-    </button>
-
-    <div class="note">
-        Paste this into your runtime to execute
-        the protected script.
-    </div>
-
-    <div class="brand">
-        KXLuaprotect
-    </div>
+<div class="loader-code">
+${escapeHtml(loader)}
+</div>
 
 </div>
 
-<!-- SCRIPT MANAGER -->
+<button onclick="copyLoader()">
+Copy loader
+</button>
 
-<div
-    class="manager"
-    id="manager"
->
+<div class="note">
+Paste this into your executor — it will
+fetch and run the script in-game.
+</div>
 
-    <div class="manager-card">
-
-        <div class="manager-head">
-
-            <div class="manager-title">
-                Scripts
-            </div>
-
-            <button
-                class="close-btn"
-                onclick="closeScripts()"
-            >
-                ×
-            </button>
-
-        </div>
-
-        <div id="scriptList"></div>
-
-    </div>
+<div class="brand">
+KXLuaprotect
+</div>
 
 </div>
 
 <script>
-
-function toggleMenu() {
-
-    const menu =
-        document.getElementById("menu");
-
-    menu.style.display =
-        menu.style.display === "block"
-            ? "none"
-            : "block";
-}
-
-/* ==========================================
-   SCRIPT MANAGER
-========================================== */
-
-async function openScripts() {
-
-    document.getElementById(
-        "menu"
-    ).style.display = "none";
-
-    document.getElementById(
-        "manager"
-    ).style.display = "flex";
-
-    await loadScripts();
-}
-
-function closeScripts() {
-
-    document.getElementById(
-        "manager"
-    ).style.display = "none";
-}
-
-async function loadScripts() {
-
-    const list =
-        document.getElementById(
-            "scriptList"
-        );
-
-    list.innerHTML =
-        '<div class="empty">Loading...</div>';
-
-    try {
-
-        const response =
-            await fetch(
-                "/api/scripts"
-            );
-
-        const scripts =
-            await response.json();
-
-        if (!scripts.length) {
-
-            list.innerHTML =
-                '<div class="empty">No scripts found.</div>';
-
-            return;
-        }
-
-        list.innerHTML = "";
-
-        scripts.forEach(script => {
-
-            const item =
-                document.createElement(
-                    "div"
-                );
-
-            item.className =
-                "script-item";
-
-            const statusClass =
-                script.enabled
-                    ? "enabled"
-                    : "disabled";
-
-            const statusText =
-                script.enabled
-                    ? "● Enabled"
-                    : "● Disabled";
-
-            item.innerHTML = \`
-
-                <div class="script-name">
-                    \${escapeHtmlClient(script.name)}
-                </div>
-
-                <div class="script-id">
-                    ID: \${escapeHtmlClient(script.id)}
-                </div>
-
-                <div class="script-status \${statusClass}">
-                    \${statusText}
-                </div>
-
-                <div class="script-actions">
-
-                    <button
-                        class="action"
-                        onclick="toggleScript('\${script.id}')"
-                    >
-                        \${script.enabled ? "Disable" : "Enable"}
-                    </button>
-
-                    <button
-                        class="action delete"
-                        onclick="deleteScript('\${script.id}')"
-                    >
-                        Delete
-                    </button>
-
-                </div>
-            \`;
-
-            list.appendChild(item);
-        });
-
-    } catch (error) {
-
-        list.innerHTML =
-            '<div class="empty">Failed to load scripts.</div>';
-    }
-}
-
-/* ==========================================
-   ENABLE / DISABLE
-========================================== */
-
-async function toggleScript(id) {
-
-    try {
-
-        const response =
-            await fetch(
-                "/api/scripts/" +
-                encodeURIComponent(id) +
-                "/toggle",
-                {
-                    method:
-                        "POST"
-                }
-            );
-
-        const data =
-            await response.json();
-
-        if (!response.ok) {
-
-            throw new Error(
-                data.error ||
-                "Failed."
-            );
-        }
-
-        await loadScripts();
-
-    } catch (error) {
-
-        alert(error.message);
-    }
-}
-
-/* ==========================================
-   DELETE
-========================================== */
-
-async function deleteScript(id) {
-
-    const confirmed =
-        confirm(
-            "Delete this script?\\n\\nThe loader will no longer work."
-        );
-
-    if (!confirmed)
-        return;
-
-    try {
-
-        const response =
-            await fetch(
-                "/api/scripts/" +
-                encodeURIComponent(id),
-                {
-                    method:
-                        "DELETE"
-                }
-            );
-
-        const data =
-            await response.json();
-
-        if (!response.ok) {
-
-            throw new Error(
-                data.error ||
-                "Delete failed."
-            );
-        }
-
-        await loadScripts();
-
-    } catch (error) {
-
-        alert(error.message);
-    }
-}
-
-/* ==========================================
-   CLIENT HTML ESCAPER
-========================================== */
-
-function escapeHtmlClient(value) {
-
-    return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-/* ==========================================
-   COPY LOADER
-========================================== */
 
 function copyLoader() {
 
@@ -1778,14 +1061,14 @@ function copyLoader() {
         .then(() => {
 
             document.querySelector(
-                ".copy-btn"
+                "button"
             ).textContent =
                 "Copied!";
 
             setTimeout(() => {
 
                 document.querySelector(
-                    ".copy-btn"
+                    "button"
                 ).textContent =
                     "Copy loader";
 
@@ -1799,7 +1082,21 @@ function copyLoader() {
 </body>
 
 </html>
-\`;
+`;
+}
+
+/* =================================================
+   HTML ESCAPER
+================================================= */
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 /* =================================================
@@ -1825,9 +1122,6 @@ app.post(
         const source =
             req.body?.source;
 
-        const name =
-            req.body?.name;
-
         if (
             typeof source !==
             "string"
@@ -1851,21 +1145,12 @@ app.post(
                 });
         }
 
-        if (
-            typeof name !==
-            "string" ||
-            !name.trim()
-        ) {
-
-            return res
-                .status(400)
-                .json({
-                    error:
-                        "Script name is required."
-                });
-        }
-
         try {
+
+            /*
+             * Source langsung diproses.
+             * Yang disimpan hanya hasil protect.
+             */
 
             const protectedSource =
                 protectLuau(source);
@@ -1876,17 +1161,8 @@ app.post(
             loaders.set(
                 id,
                 {
-                    id:
-                        id,
-
-                    name:
-                        name.trim(),
-
                     source:
                         protectedSource,
-
-                    enabled:
-                        true,
 
                     createdAt:
                         Date.now()
@@ -1903,18 +1179,11 @@ app.post(
                 `loadstring(game:HttpGet("${url}"))()`;
 
             res.json({
-
                 success:
                     true,
 
                 id:
                     id,
-
-                name:
-                    name.trim(),
-
-                enabled:
-                    true,
 
                 url:
                     url,
@@ -1936,118 +1205,6 @@ app.post(
                         "Protection failed."
                 });
         }
-    }
-);
-
-/* =================================================
-   SCRIPT LIST
-================================================= */
-
-app.get(
-    "/api/scripts",
-    (req, res) => {
-
-        const scripts =
-            Array.from(
-                loaders.values()
-            )
-            .map(item => ({
-                id:
-                    item.id,
-
-                name:
-                    item.name,
-
-                enabled:
-                    item.enabled,
-
-                createdAt:
-                    item.createdAt
-            }));
-
-        res.json(
-            scripts
-        );
-    }
-);
-
-/* =================================================
-   ENABLE / DISABLE SCRIPT
-================================================= */
-
-app.post(
-    "/api/scripts/:id/toggle",
-    (req, res) => {
-
-        const id =
-            req.params.id;
-
-        const item =
-            loaders.get(id);
-
-        if (!item) {
-
-            return res
-                .status(404)
-                .json({
-                    error:
-                        "Script not found."
-                });
-        }
-
-        item.enabled =
-            !item.enabled;
-
-        loaders.set(
-            id,
-            item
-        );
-
-        res.json({
-
-            success:
-                true,
-
-            id:
-                id,
-
-            enabled:
-                item.enabled
-        });
-    }
-);
-
-/* =================================================
-   DELETE SCRIPT
-================================================= */
-
-app.delete(
-    "/api/scripts/:id",
-    (req, res) => {
-
-        const id =
-            req.params.id;
-
-        if (!loaders.has(id)) {
-
-            return res
-                .status(404)
-                .json({
-                    error:
-                        "Script not found."
-                });
-        }
-
-        loaders.delete(id);
-
-        res.json({
-
-            success:
-                true,
-
-            message:
-                "Script deleted."
-        });
     }
 );
 
@@ -2075,21 +1232,6 @@ app.get(
                 );
         }
 
-        /*
-         * Disabled
-         */
-
-        if (!item.enabled) {
-
-            return res
-                .status(403)
-                .type("text")
-                .send(
-                    "-- KXLuaprotect\n" +
-                    "-- This script is currently disabled."
-                );
-        }
-
         const userAgent =
             String(
                 req.headers[
@@ -2105,7 +1247,7 @@ app.get(
             ).toLowerCase();
 
         /*
-         * Detect normal browsers
+         * Detect normal browsers.
          */
 
         const isBrowser =
@@ -2140,7 +1282,7 @@ app.get(
 
         /*
          * Browser:
-         * Never send source.
+         * NEVER send source.
          */
 
         if (isBrowser) {
@@ -2160,7 +1302,7 @@ app.get(
         }
 
         /*
-         * Runtime:
+         * Runtime/non-browser:
          * Send protected source.
          */
 
@@ -2193,68 +1335,37 @@ app.use(
             .type("html")
             .send(`
 <!DOCTYPE html>
-
 <html>
-
 <head>
-
-<title>
-KXLuaprotect - 404
-</title>
-
+<title>KXLuaprotect - 404</title>
 <style>
-
 body {
-
     margin:0;
-
     min-height:100vh;
-
     background:#07070a;
-
     color:white;
-
     display:flex;
-
     align-items:center;
-
     justify-content:center;
-
     font-family:Arial;
 }
-
 div {
     text-align:center;
 }
-
 h1 {
     color:#9565ff;
 }
-
 p {
     color:#77727f;
 }
-
 </style>
-
 </head>
-
 <body>
-
 <div>
-
-<h1>
-404
-</h1>
-
-<p>
-KXLuaprotect — Page not found.
-</p>
-
+<h1>404</h1>
+<p>KXLuaprotect — Page not found.</p>
 </div>
-
 </body>
-
 </html>
         `);
     }
