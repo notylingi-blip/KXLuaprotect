@@ -1,3 +1,11 @@
+process.on("uncaughtException", (err) => {
+    console.error("Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+    console.error("Unhandled Rejection:", reason);
+});
+
 const express = require("express");
 const crypto = require("crypto");
 
@@ -1329,7 +1337,7 @@ p {
         #e5f4ff;
 
     font-weight:
-        800;
+            800;
 
     font-size:
         14px;
@@ -1616,38 +1624,38 @@ async function loadScripts() {
                     ? "● Enabled"
                     : "● Disabled";
 
-            item.innerHTML = `
+            item.innerHTML = \`
 
                 <div class="script-name">
-                    ${escapeHtmlClient(script.name)}
+                    \${escapeHtmlClient(script.name)}
                 </div>
 
                 <div class="script-id">
-                    ID: ${escapeHtmlClient(script.id)}
+                    ID: \${escapeHtmlClient(script.id)}
                 </div>
 
-                <div class="script-status ${statusClass}">
-                    ${statusText}
+                <div class="script-status \${statusClass}">
+                    \${statusText}
                 </div>
 
                 <div class="script-actions">
 
                     <button
                         class="action"
-                        onclick="toggleScript('${script.id}')"
+                        onclick="toggleScript('\${script.id}')"
                     >
-                        ${script.enabled ? "Disable" : "Enable"}
+                        \${script.enabled ? "Disable" : "Enable"}
                     </button>
 
                     <button
                         class="action delete"
-                        onclick="deleteScript('${script.id}')"
+                        onclick="deleteScript('\${script.id}')"
                     >
                         Delete
                     </button>
 
                 </div>
-            `;
+            \`;
 
             list.appendChild(item);
         });
@@ -1791,7 +1799,7 @@ function copyLoader() {
 </body>
 
 </html>
-`;
+\`;
 }
 
 /* =================================================
