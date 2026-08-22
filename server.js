@@ -3,68 +3,159 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "5mb" }));
 
-function protectLuau(code) {
-    // Transformasi sederhana untuk demo.
-    // Untuk protector Luau sungguhan, bagian ini bisa diganti
-    // dengan engine transformasi/obfuscation milikmu sendiri.
-    const encoded = Buffer.from(code, "utf8").toString("base64");
+function protectLuau(source) {
+    let code = String(source);
+
+    // Remove block comments
+    code = code.replace(/--\[\[[\s\S]*?\]\]/g, "");
+
+    // Remove single-line comments while preserving strings
+    code = code.replace(
+        /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(--[^\r\n]*)/g,
+        (match, stringPart) => stringPart || ""
+    );
+
+    // Normalize line endings
+    code = code.replace(/\r\n/g, "\n");
+
+    // Remove unnecessary whitespace around common punctuation
+    code = code.replace(/[ \t]+/g, " ");
+    code = code.replace(/[ \t]*\n[ \t]*/g, "\n");
+
+    code = code.replace(/\s*([(),{}[\]])\s*/g, "$1");
+    code = code.replace(/\s*([=+\-*\/%^<>])\s*/g, "$1");
+
+    // Keep strings intact while transforming simple local names.
+    const reserved = new Set([
+        "and","break","do","else","elseif","end","false","for",
+        "function","if","in","local","nil","not","or","repeat",
+        "return","then","true","until","while","continue",
+        "type","export","typeof","self"
+    ]);
+
+    const names = [];
+    const seen = new Set();
+
+    const localPattern =
+        /\blocal\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+
+    let match;
+
+    while ((match = localPattern.exec(code)) !== null) {
+        const name = match[1];
+
+        if (
+            !reserved.has(name) &&
+            !seen.has(name) &&
+            name.length > 2
+        ) {
+            seen.add(name);
+            names.push(name);
+        }
+    }
+
+    // Generate short names.
+    const alphabet = "abcdefghijklmnopqrstuvwxyz";
+
+    const replacements = new Map();
+
+    names.forEach((name, index) => {
+        let n = index;
+        let result = "";
+
+        do {
+            result =
+                alphabet[n % alphabet.length] + result;
+            n = Math.floor(n / alphabet.length) - 1;
+        } while (n >= 0);
+
+        if (result !== name) {
+            replacements.set(name, "__kx_" + result);
+        }
+    });
+
+    // Replace identifiers outside strings.
+    for (const [oldName, newName] of replacements) {
+        const parts = [];
+        let i = 0;
+
+        while (i < code.length) {
+            const char = code[i];
+
+            if (char === '"' || char === "'") {
+                const quote = char;
+                let j = i + 1;
+
+                while (j < code.length) {
+                    if (code[j] === "\\") {
+                        j += 2;
+                        continue;
+                    }
+
+                    if (code[j] === quote) {
+                        j++;
+                        break;
+                    }
+
+                    j++;
+                }
+
+                parts.push(code.slice(i, j));
+                i = j;
+                continue;
+            }
+
+            const identifier =
+                code.slice(i).match(
+                    /^[A-Za-z_][A-Za-z0-9_]*/
+                );
+
+            if (identifier) {
+                const word = identifier[0];
+
+                parts.push(
+                    word === oldName ? newName : word
+                );
+
+                i += word.length;
+            } else {
+                parts.push(char);
+                i++;
+            }
+        }
+
+        code = parts.join("");
+    }
+
+    // Clean empty lines.
+    code = code
+        .split("\n")
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join("\n");
 
     return `-- KXLuaprotect
--- Protected Luau
+-- Protected source
 
-local encoded = "${encoded}"
-
-local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-local function decodeBase64(data)
-    data = data:gsub("[^" .. chars .. "=]", "")
-
-    return (data:gsub(".", function(x)
-        if x == "=" then
-            return ""
-        end
-
-        local r, f = "", chars:find(x) - 1
-
-        for i = 6, 1, -1 do
-            r = r .. (f % 2^i - f % 2^(i-1) > 0 and "1" or "0")
-        end
-
-        return r
-    end):gsub("%d%d%d?%d?%d?%d?%d?%d?", function(x)
-        if #x ~= 8 then
-            return ""
-        end
-
-        local c = 0
-
-        for i = 1, 8 do
-            c = c + (x:sub(i,i) == "1" and 2^(8-i) or 0)
-        end
-
-        return string.char(c)
-    end))
-end
-
-local protectedSource = decodeBase64(encoded)
-
-return protectedSource
+${code}
 `;
 }
 
-const html = `
+const HTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
 
 <title>KXLuaprotect</title>
 
 <style>
-
 * {
     box-sizing: border-box;
 }
@@ -73,139 +164,162 @@ body {
     margin: 0;
     min-height: 100vh;
     background:
-        radial-gradient(circle at top, #21133d 0%, #0b0b10 45%, #050507 100%);
-    color: #ffffff;
-    font-family: Arial, sans-serif;
+        radial-gradient(
+            circle at 50% 0%,
+            #26163d 0%,
+            #0d0b12 42%,
+            #050507 100%
+        );
+    color: #fff;
+    font-family:
+        Inter,
+        Arial,
+        sans-serif;
 }
 
 .container {
-    width: min(1100px, 92%);
+    width: min(1150px, 94%);
     margin: auto;
-    padding: 45px 0;
+    padding: 35px 0 45px;
 }
 
 .header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 28px;
 }
 
 .logo {
-    font-size: 38px;
-    font-weight: 800;
-    letter-spacing: 1px;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -1px;
 }
 
 .logo span {
-    color: #9b6cff;
+    color: #9a6cff;
 }
 
 .subtitle {
-    color: #888;
     margin-top: 8px;
+    color: #85818d;
+    font-size: 14px;
 }
 
-.panel {
-    background: rgba(18,18,24,.92);
-    border: 1px solid #292333;
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.card {
+    background: rgba(14, 13, 19, .94);
+    border: 1px solid #29232f;
     border-radius: 18px;
-    padding: 20px;
-    box-shadow: 0 15px 50px rgba(0,0,0,.35);
+    padding: 16px;
+    box-shadow:
+        0 20px 60px rgba(0,0,0,.35);
 }
 
-.label {
+.card-title {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 10px;
-    color: #bbb;
-    font-size: 14px;
+    align-items: center;
+    margin-bottom: 12px;
+    color: #c8c3d0;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 textarea {
     width: 100%;
-    min-height: 300px;
+    height: 430px;
     resize: vertical;
-    background: #09090d;
-    color: #e8e8e8;
-    border: 1px solid #30283d;
-    border-radius: 12px;
-    padding: 15px;
     outline: none;
+    border: 1px solid #302a38;
+    border-radius: 12px;
+    background: #08080c;
+    color: #e8e3ee;
+    padding: 15px;
     font-family: Consolas, monospace;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.55;
 }
 
 textarea:focus {
-    border-color: #8d5cff;
+    border-color: #8757ff;
+    box-shadow:
+        0 0 0 2px rgba(135,87,255,.08);
 }
 
-.buttons {
+.actions {
     display: flex;
     gap: 10px;
+    margin-top: 16px;
     flex-wrap: wrap;
-    margin: 15px 0 25px;
 }
 
 button {
     border: 0;
     border-radius: 10px;
-    padding: 12px 20px;
-    cursor: pointer;
-    font-weight: 700;
+    padding: 12px 17px;
     color: white;
+    cursor: pointer;
+    font-weight: 800;
 }
 
 .protect {
-    background: #7d4cff;
+    background: #8152f5;
+    flex: 1;
 }
 
-.copy {
-    background: #292431;
+.secondary {
+    background: #211d27;
 }
 
-.download {
-    background: #292431;
-}
-
-.clear {
-    background: #351f27;
+.danger {
+    background: #321d27;
 }
 
 button:hover {
-    opacity: .85;
+    filter: brightness(1.12);
 }
 
 .status {
-    color: #777;
-    font-size: 13px;
-    margin-top: 10px;
+    text-align: center;
+    margin-top: 15px;
+    color: #77717f;
+    font-size: 12px;
 }
 
 .footer {
     text-align: center;
-    color: #555;
-    margin-top: 25px;
-    font-size: 13px;
+    color: #55505c;
+    font-size: 12px;
+    margin-top: 22px;
 }
 
-@media(max-width:600px) {
-
-    .container {
-        padding: 25px 0;
-    }
-
-    .logo {
-        font-size: 30px;
+@media (max-width: 800px) {
+    .grid {
+        grid-template-columns: 1fr;
     }
 
     textarea {
-        min-height: 240px;
+        height: 300px;
     }
 
-    button {
-        width: 100%;
+    .logo {
+        font-size: 34px;
     }
 }
 
+@media (max-width: 500px) {
+    .container {
+        padding-top: 25px;
+    }
+
+    .actions button {
+        width: 100%;
+    }
+}
 </style>
 </head>
 
@@ -219,81 +333,113 @@ button:hover {
         </div>
 
         <div class="subtitle">
-            Luau Code Protection Tool
+            Modern Luau Source Protection
         </div>
     </div>
 
-    <div class="panel">
+    <div class="grid">
 
-        <div class="label">
-            <span>INPUT LUAU</span>
-            <span id="inputCount">0 characters</span>
-        </div>
+        <div class="card">
 
-        <textarea
-            id="input"
-            placeholder="Paste your Luau code here..."
-        ></textarea>
+            <div class="card-title">
+                <span>INPUT</span>
+                <span id="inputCount">
+                    0 characters
+                </span>
+            </div>
 
-        <div class="buttons">
-
-            <button class="protect" onclick="protectCode()">
-                🛡️ Protect
-            </button>
-
-            <button class="copy" onclick="copyOutput()">
-                📋 Copy
-            </button>
-
-            <button class="download" onclick="downloadOutput()">
-                💾 Download
-            </button>
-
-            <button class="clear" onclick="clearAll()">
-                🗑️ Clear
-            </button>
+            <textarea
+                id="input"
+                spellcheck="false"
+                placeholder="Paste your Luau code here..."
+            ></textarea>
 
         </div>
 
-        <div class="label">
-            <span>PROTECTED OUTPUT</span>
-            <span id="outputCount">0 characters</span>
+        <div class="card">
+
+            <div class="card-title">
+                <span>PROTECTED OUTPUT</span>
+                <span id="outputCount">
+                    0 characters
+                </span>
+            </div>
+
+            <textarea
+                id="output"
+                spellcheck="false"
+                readonly
+                placeholder="Your protected code will appear here..."
+            ></textarea>
+
         </div>
 
-        <textarea
-            id="output"
-            readonly
-            placeholder="Protected code will appear here..."
-        ></textarea>
+    </div>
 
-        <div class="status" id="status">
-            Ready.
-        </div>
+    <div class="actions">
 
+        <button
+            class="protect"
+            onclick="protectCode()"
+        >
+            🛡 Protect
+        </button>
+
+        <button
+            class="secondary"
+            onclick="copyOutput()"
+        >
+            📋 Copy
+        </button>
+
+        <button
+            class="secondary"
+            onclick="downloadOutput()"
+        >
+            ↓ Download
+        </button>
+
+        <button
+            class="danger"
+            onclick="clearAll()"
+        >
+            Clear
+        </button>
+
+    </div>
+
+    <div
+        class="status"
+        id="status"
+    >
+        Ready
     </div>
 
     <div class="footer">
-        KXLuaprotect • Powered by Railway
+        KXLuaprotect
     </div>
 
 </div>
 
 <script>
+const input =
+    document.getElementById("input");
 
-const input = document.getElementById("input");
-const output = document.getElementById("output");
-const inputCount = document.getElementById("inputCount");
-const outputCount = document.getElementById("outputCount");
-const statusText = document.getElementById("status");
+const output =
+    document.getElementById("output");
 
-input.addEventListener("input", function() {
+const inputCount =
+    document.getElementById("inputCount");
+
+const outputCount =
+    document.getElementById("outputCount");
+
+const status =
+    document.getElementById("status");
+
+input.addEventListener("input", () => {
     inputCount.textContent =
         input.value.length + " characters";
-});
-
-output.addEventListener("input", function() {
-    outputCount.textContent =
-        output.value.length + " characters";
 });
 
 async function protectCode() {
@@ -301,29 +447,30 @@ async function protectCode() {
     const code = input.value;
 
     if (!code.trim()) {
-        statusText.textContent =
-            "Please enter Luau code first.";
+        status.textContent =
+            "Paste Luau code first.";
         return;
     }
 
-    statusText.textContent =
+    status.textContent =
         "Protecting...";
 
     try {
 
-        const response = await fetch("/protect", {
-            method: "POST",
+        const response =
+            await fetch("/protect", {
+                method: "POST",
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+                body: JSON.stringify({
+                    code
+                })
+            });
 
-            headers: {
-                "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify({
-                code: code
-            })
-        });
-
-        const data = await response.json();
+        const data =
+            await response.json();
 
         if (!response.ok) {
             throw new Error(
@@ -331,18 +478,20 @@ async function protectCode() {
             );
         }
 
-        output.value = data.protected;
+        output.value =
+            data.protected;
 
         outputCount.textContent =
-            output.value.length + " characters";
+            output.value.length +
+            " characters";
 
-        statusText.textContent =
+        status.textContent =
             "Protection completed.";
 
     } catch (error) {
 
-        statusText.textContent =
-            "Error: " + error.message;
+        status.textContent =
+            error.message;
 
     }
 }
@@ -350,31 +499,31 @@ async function protectCode() {
 async function copyOutput() {
 
     if (!output.value) {
-        statusText.textContent =
+        status.textContent =
             "Nothing to copy.";
         return;
     }
 
-    await navigator.clipboard.writeText(
-        output.value
-    );
+    await navigator.clipboard
+        .writeText(output.value);
 
-    statusText.textContent =
-        "Output copied.";
+    status.textContent =
+        "Copied.";
 }
 
 function downloadOutput() {
 
     if (!output.value) {
-        statusText.textContent =
+        status.textContent =
             "Nothing to download.";
         return;
     }
 
-    const blob = new Blob(
-        [output.value],
-        { type: "text/plain" }
-    );
+    const blob =
+        new Blob(
+            [output.value],
+            { type: "text/plain" }
+        );
 
     const url =
         URL.createObjectURL(blob);
@@ -383,18 +532,15 @@ function downloadOutput() {
         document.createElement("a");
 
     a.href = url;
-    a.download = "KXLuaprotect.lua";
-
-    document.body.appendChild(a);
+    a.download =
+        "KXLuaprotect.lua";
 
     a.click();
 
-    a.remove();
-
     URL.revokeObjectURL(url);
 
-    statusText.textContent =
-        "Download started.";
+    status.textContent =
+        "Downloaded.";
 }
 
 function clearAll() {
@@ -408,10 +554,9 @@ function clearAll() {
     outputCount.textContent =
         "0 characters";
 
-    statusText.textContent =
-        "Ready.";
+    status.textContent =
+        "Ready";
 }
-
 </script>
 
 </body>
@@ -419,7 +564,7 @@ function clearAll() {
 `;
 
 app.get("/", (req, res) => {
-    res.send(html);
+    res.type("html").send(HTML);
 });
 
 app.post("/protect", (req, res) => {
@@ -428,24 +573,24 @@ app.post("/protect", (req, res) => {
 
     if (typeof code !== "string") {
         return res.status(400).json({
-            error: "Invalid code."
+            error: "Invalid Luau source."
         });
     }
 
     if (!code.trim()) {
         return res.status(400).json({
-            error: "Code is empty."
+            error: "Luau source is empty."
         });
     }
 
     try {
 
-        const protectedCode =
+        const result =
             protectLuau(code);
 
         res.json({
             success: true,
-            protected: protectedCode
+            protected: result
         });
 
     } catch (error) {
@@ -453,9 +598,8 @@ app.post("/protect", (req, res) => {
         console.error(error);
 
         res.status(500).json({
-            error: "Protection failed."
+            error: "Unable to process Luau source."
         });
-
     }
 });
 
