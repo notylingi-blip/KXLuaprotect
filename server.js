@@ -20,7 +20,7 @@ app.use(express.json({ limit: "5mb" }));
  Runtime request:
    /files/loaders/ID.lua
           ↓
-   Protected Luau
+   Protected Luau (only if enabled)
 
 ==================================================
 */
@@ -185,6 +185,20 @@ function protectLuau(source) {
 }
 
 /* =================================================
+   HTML ESCAPER
+================================================= */
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+/* =================================================
    HOME PAGE
 ================================================= */
 
@@ -208,11 +222,11 @@ const HOME_PAGE = `
 
 * {
     box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 body {
-
-    margin: 0;
 
     min-height: 100vh;
 
@@ -231,276 +245,478 @@ body {
         sans-serif;
 }
 
-.container {
+/* ── TOP BAR ── */
 
-    width:
-        min(1100px,94%);
+.topbar {
 
-    margin:
-        auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
 
-    padding:
-        40px 0;
+    padding: 14px 20px;
+
+    border-bottom:
+        1px solid #1e1827;
+
+    background:
+        rgba(10,9,14,.85);
+
+    backdrop-filter:
+        blur(8px);
+
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
-.header {
+/* ── MENU BUTTON (⋮) ── */
 
-    text-align:
-        center;
-
-    margin-bottom:
-        30px;
+.menu-wrap {
+    position: relative;
 }
+
+.menu-btn {
+
+    background: none;
+    border: none;
+    color: #9d94a8;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 7px;
+    line-height: 1;
+    transition: background .15s, color .15s;
+    letter-spacing: 1px;
+}
+
+.menu-btn:hover {
+    background: #1e1829;
+    color: #c8bfd4;
+}
+
+.dropdown {
+
+    display: none;
+    position: absolute;
+    left: 0;
+    top: calc(100% + 6px);
+
+    background: #100e18;
+    border: 1px solid #2b2337;
+    border-radius: 11px;
+    overflow: hidden;
+
+    min-width: 170px;
+
+    box-shadow:
+        0 12px 40px rgba(0,0,0,.55);
+
+    z-index: 200;
+}
+
+.dropdown.open {
+    display: block;
+}
+
+.dropdown-item {
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 11px 16px;
+
+    color: #c0b8cc;
+    font-size: 14px;
+    cursor: pointer;
+
+    transition: background .12s;
+}
+
+.dropdown-item:hover {
+    background: #1c1729;
+    color: #e2daed;
+}
+
+.dropdown-item .di-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+/* ── LOGO ── */
 
 .logo {
 
-    font-size:
-        43px;
-
-    font-weight:
-        900;
-
-    letter-spacing:
-        -1px;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    flex: 1;
 }
 
 .logo span {
-
-    color:
-        #9565ff;
+    color: #9565ff;
 }
 
-.subtitle {
+/* ── CONTAINER ── */
 
-    color:
-        #77727f;
+.container {
 
-    margin-top:
-        8px;
-
-    font-size:
-        14px;
+    width: min(1100px, 94%);
+    margin: auto;
+    padding: 36px 0 60px;
 }
+
+/* ── CARD ── */
 
 .card {
 
-    background:
-        rgba(14,13,19,.96);
-
-    border:
-        1px solid #2b2535;
-
-    border-radius:
-        18px;
-
-    padding:
-        18px;
-
-    box-shadow:
-        0 25px 70px
-        rgba(0,0,0,.4);
+    background: rgba(14,13,19,.96);
+    border: 1px solid #2b2535;
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 25px 70px rgba(0,0,0,.4);
 }
 
 .label {
 
-    color:
-        #aaa4b1;
+    color: #aaa4b1;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
 
-    font-size:
-        12px;
+/* ── PAGE ── */
 
-    font-weight:
-        700;
+.page {
+    display: none;
+}
 
-    margin-bottom:
-        10px;
+.page.active {
+    display: block;
+}
+
+/* ── PAGE HEADER ── */
+
+.page-header {
+
+    margin-bottom: 22px;
+}
+
+.page-title {
+
+    font-size: 20px;
+    font-weight: 800;
+    color: #e8e0f2;
+}
+
+.page-sub {
+
+    color: #6e6679;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+/* ── INPUTS ── */
+
+input[type="text"] {
+
+    width: 100%;
+    background: #08080c;
+    color: #e8e4ed;
+    border: 1px solid #302a39;
+    border-radius: 12px;
+    padding: 12px 15px;
+    outline: none;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    transition: border-color .15s;
+}
+
+input[type="text"]:focus {
+    border-color: #895cff;
+}
+
+input[type="text"]::placeholder {
+    color: #4a4452;
 }
 
 textarea {
 
-    width:
-        100%;
-
-    height:
-        390px;
-
-    resize:
-        vertical;
-
-    background:
-        #08080c;
-
-    color:
-        #e8e4ed;
-
-    border:
-        1px solid #302a39;
-
-    border-radius:
-        12px;
-
-    padding:
-        15px;
-
-    outline:
-        none;
-
-    font-family:
-        Consolas,
-        monospace;
-
-    font-size:
-        13px;
-
-    line-height:
-        1.55;
+    width: 100%;
+    height: 340px;
+    resize: vertical;
+    background: #08080c;
+    color: #e8e4ed;
+    border: 1px solid #302a39;
+    border-radius: 12px;
+    padding: 15px;
+    outline: none;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    transition: border-color .15s;
 }
 
 textarea:focus {
-
-    border-color:
-        #895cff;
+    border-color: #895cff;
 }
+
+.input-group {
+    margin-bottom: 14px;
+}
+
+/* ── BUTTONS ── */
 
 .buttons {
 
-    display:
-        flex;
-
-    gap:
-        10px;
-
-    margin-top:
-        15px;
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
 }
 
 button {
 
-    border:
-        0;
-
-    border-radius:
-        10px;
-
-    padding:
-        13px 18px;
-
-    color:
-        white;
-
-    font-weight:
-        700;
-
-    cursor:
-        pointer;
+    border: 0;
+    border-radius: 10px;
+    padding: 12px 18px;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 14px;
+    transition: filter .12s;
 }
 
-.protect {
+.btn-protect {
 
-    flex:
-        1;
-
-    background:
-        #8051f5;
+    flex: 1;
+    background: #8051f5;
 }
 
-.secondary {
-
-    background:
-        #25202b;
+.btn-secondary {
+    background: #25202b;
 }
 
 button:hover {
-
-    filter:
-        brightness(1.12);
+    filter: brightness(1.12);
 }
+
+/* ── RESULT BOX ── */
 
 .result {
 
-    display:
-        none;
-
-    margin-top:
-        22px;
+    display: none;
+    margin-top: 22px;
 }
 
 .resultBox {
 
-    background:
-        #08080c;
-
-    border:
-        1px solid #302a39;
-
-    border-radius:
-        12px;
-
-    padding:
-        14px;
-
-    color:
-        #b897ff;
-
-    font-family:
-        Consolas,
-        monospace;
-
-    font-size:
-        13px;
-
-    word-break:
-        break-all;
+    background: #08080c;
+    border: 1px solid #302a39;
+    border-radius: 12px;
+    padding: 14px;
+    color: #b897ff;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    word-break: break-all;
 }
+
+/* ── STATUS ── */
 
 .status {
 
-    text-align:
-        center;
-
-    color:
-        #746e7c;
-
-    font-size:
-        12px;
-
-    margin-top:
-        15px;
+    text-align: center;
+    color: #746e7c;
+    font-size: 12px;
+    margin-top: 15px;
 }
+
+/* ── SCRIPT LIST ── */
+
+.script-list {
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.script-empty {
+
+    text-align: center;
+    color: #4a4452;
+    font-size: 14px;
+    padding: 40px 0;
+}
+
+.script-item {
+
+    background: #0d0c14;
+    border: 1px solid #26203080;
+    border-radius: 13px;
+    padding: 15px 18px;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.script-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.script-name {
+
+    font-size: 15px;
+    font-weight: 700;
+    color: #ddd6e8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.script-meta {
+
+    font-size: 12px;
+    color: #58525f;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.script-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* ── TOGGLE ── */
+
+.toggle-wrap {
+
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.toggle-label {
+
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 52px;
+}
+
+.toggle-label.enabled {
+    color: #7cdc9a;
+}
+
+.toggle-label.disabled {
+    color: #7a6f85;
+}
+
+.toggle {
+
+    position: relative;
+    width: 38px;
+    height: 21px;
+    cursor: pointer;
+}
+
+.toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-track {
+
+    position: absolute;
+    inset: 0;
+    background: #2b2338;
+    border-radius: 99px;
+    transition: background .2s;
+}
+
+.toggle input:checked + .toggle-track {
+    background: #6c3fc4;
+}
+
+.toggle-thumb {
+
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 15px;
+    height: 15px;
+    background: #6e6278;
+    border-radius: 50%;
+    transition: transform .2s, background .2s;
+}
+
+.toggle input:checked ~ .toggle-thumb {
+    transform: translateX(17px);
+    background: #c49dff;
+}
+
+.btn-delete {
+
+    background: #1e0f1a;
+    border: 1px solid #3d1f2f;
+    color: #c06070;
+    font-size: 13px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background .12s, color .12s;
+}
+
+.btn-delete:hover {
+
+    background: #3d1020;
+    color: #f07080;
+    filter: none;
+}
+
+/* ── FOOTER ── */
 
 .footer {
 
-    text-align:
-        center;
-
-    color:
-        #514c58;
-
-    font-size:
-        12px;
-
-    margin-top:
-        22px;
+    text-align: center;
+    color: #2e2a33;
+    font-size: 12px;
+    margin-top: 22px;
 }
+
+/* ── RESPONSIVE ── */
 
 @media(max-width:650px) {
 
     .logo {
-
-        font-size:
-            34px;
+        font-size: 18px;
     }
 
     textarea {
-
-        height:
-            300px;
+        height: 260px;
     }
 
     .buttons {
+        flex-direction: column;
+    }
 
-        flex-direction:
-            column;
+    .script-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .script-actions {
+        width: 100%;
+        justify-content: flex-end;
     }
 }
 
@@ -510,237 +726,419 @@ button:hover {
 
 <body>
 
+<!-- ════ TOP BAR ════ -->
+
+<div class="topbar">
+
+    <div class="menu-wrap">
+
+        <button
+            class="menu-btn"
+            id="menuBtn"
+            title="Menu"
+        >⋮</button>
+
+        <div
+            class="dropdown"
+            id="dropdown"
+        >
+
+            <div
+                class="dropdown-item"
+                onclick="showPage('protector')"
+            >
+                <span class="di-icon">🛡</span>
+                Protector
+            </div>
+
+            <div
+                class="dropdown-item"
+                onclick="showPage('scripts')"
+            >
+                <span class="di-icon">📜</span>
+                Script
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="logo">
+        KX<span>Luaprotect</span>
+    </div>
+
+</div>
+
+<!-- ════ CONTAINER ════ -->
+
 <div class="container">
-
-<div class="header">
-
-<div class="logo">
-KX<span>Luaprotect</span>
-</div>
-
-<div class="subtitle">
-Luau Source Protection
-</div>
-
-</div>
 
 <div class="card">
 
-<div class="label">
-SOURCE
-</div>
+    <!-- ── PROTECTOR PAGE ── -->
 
-<textarea
-    id="source"
-    spellcheck="false"
-    placeholder="Paste your Luau source here..."
-></textarea>
+    <div
+        class="page active"
+        id="page-protector"
+    >
 
-<div class="buttons">
+        <div class="page-header">
+            <div class="page-title">Protector</div>
+            <div class="page-sub">Paste your Luau source, give it a name, then protect.</div>
+        </div>
 
-<button
-    class="protect"
-    onclick="protectCode()"
->
-🛡 Protect
-</button>
+        <div class="input-group">
+            <div class="label">Script Name</div>
+            <input
+                type="text"
+                id="scriptName"
+                placeholder="e.g. MyHub, BloomixV2, KXL_Lagger..."
+            >
+        </div>
 
-<button
-    class="secondary"
-    onclick="clearCode()"
->
-Clear
-</button>
+        <div class="input-group">
+            <div class="label">Source</div>
+            <textarea
+                id="source"
+                spellcheck="false"
+                placeholder="Paste your Luau source here..."
+            ></textarea>
+        </div>
 
-</div>
+        <div class="buttons">
 
-<div
-    class="result"
-    id="result"
->
+            <button
+                class="btn-protect"
+                onclick="protectCode()"
+            >
+                🛡 Protect
+            </button>
 
-<div class="label">
-LOADSTRING
-</div>
+            <button
+                class="btn-secondary"
+                onclick="clearCode()"
+            >
+                Clear
+            </button>
 
-<div
-    class="resultBox"
-    id="loadstring"
-></div>
+        </div>
 
-<div class="buttons">
+        <div
+            class="result"
+            id="result"
+        >
 
-<button
-    class="secondary"
-    onclick="copyLoadstring()"
->
-📋 Copy Loadstring
-</button>
+            <div class="label">Loadstring</div>
 
-<button
-    class="secondary"
-    onclick="copyUrl()"
->
-🔗 Copy URL
-</button>
+            <div
+                class="resultBox"
+                id="loadstring"
+            ></div>
 
-</div>
+            <div class="buttons">
 
-</div>
+                <button
+                    class="btn-secondary"
+                    onclick="copyLoadstring()"
+                >
+                    📋 Copy Loadstring
+                </button>
 
-<div
-    class="status"
-    id="status"
->
-Ready.
-</div>
+                <button
+                    class="btn-secondary"
+                    onclick="copyUrl()"
+                >
+                    🔗 Copy URL
+                </button>
+
+            </div>
+
+        </div>
+
+        <div
+            class="status"
+            id="status"
+        >
+            Ready.
+        </div>
+
+    </div>
+
+    <!-- ── SCRIPTS PAGE ── -->
+
+    <div
+        class="page"
+        id="page-scripts"
+    >
+
+        <div class="page-header">
+            <div class="page-title">Script</div>
+            <div class="page-sub">Manage your protected scripts — toggle enable/disable or delete.</div>
+        </div>
+
+        <div
+            class="script-list"
+            id="scriptList"
+        >
+            <div class="script-empty" id="scriptEmpty">
+                No scripts yet. Go to Protector to add one.
+            </div>
+        </div>
+
+    </div>
 
 </div>
 
 <div class="footer">
-KXLuaprotect
+    KXLuaprotect
 </div>
 
 </div>
+
+<!-- ════ SCRIPT ════ -->
 
 <script>
+
+/* ── state ── */
 
 let currentUrl = "";
 let currentLoadstring = "";
 
+/* ── page switching ── */
+
+function showPage(name) {
+
+    document
+        .querySelectorAll(".page")
+        .forEach(p => p.classList.remove("active"));
+
+    document
+        .getElementById("page-" + name)
+        .classList.add("active");
+
+    closeMenu();
+
+    if (name === "scripts") {
+        renderScripts();
+    }
+}
+
+/* ── menu toggle ── */
+
+const menuBtn =
+    document.getElementById("menuBtn");
+
+const dropdown =
+    document.getElementById("dropdown");
+
+menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle("open");
+});
+
+document.addEventListener("click", () => {
+    closeMenu();
+});
+
+function closeMenu() {
+    dropdown.classList.remove("open");
+}
+
+/* ── protect ── */
+
 async function protectCode() {
 
     const source =
-        document.getElementById(
-            "source"
-        ).value;
+        document.getElementById("source").value;
+
+    const nameVal =
+        document.getElementById("scriptName").value.trim();
 
     const status =
-        document.getElementById(
-            "status"
-        );
+        document.getElementById("status");
 
     if (!source.trim()) {
-
-        status.textContent =
-            "Paste your Luau source first.";
-
+        status.textContent = "Paste your Luau source first.";
         return;
     }
 
-    status.textContent =
-        "Protecting...";
+    status.textContent = "Protecting...";
 
     try {
 
-        const response =
-            await fetch(
-                "/api/protect",
-                {
-                    method:
-                        "POST",
+        const response = await fetch("/api/protect", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                source: source,
+                name: nameVal || "Untitled Script"
+            })
+        });
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body:
-                        JSON.stringify({
-                            source:
-                                source
-                        })
-                }
-            );
-
-        const data =
-            await response.json();
+        const data = await response.json();
 
         if (!response.ok) {
-
-            throw new Error(
-                data.error ||
-                "Protection failed."
-            );
+            throw new Error(data.error || "Protection failed.");
         }
 
-        currentUrl =
-            data.url;
+        currentUrl = data.url;
+        currentLoadstring = data.loadstring;
 
-        currentLoadstring =
-            data.loadstring;
-
-        document.getElementById(
-            "loadstring"
-        ).textContent =
+        document.getElementById("loadstring").textContent =
             currentLoadstring;
 
-        document.getElementById(
-            "result"
-        ).style.display =
+        document.getElementById("result").style.display =
             "block";
 
-        status.textContent =
-            "Protected successfully.";
+        status.textContent = "Protected successfully.";
 
     } catch (error) {
-
-        status.textContent =
-            error.message;
+        status.textContent = error.message;
     }
 }
 
 async function copyLoadstring() {
 
-    if (!currentLoadstring)
-        return;
+    if (!currentLoadstring) return;
 
-    await navigator.clipboard
-        .writeText(
-            currentLoadstring
-        );
+    await navigator.clipboard.writeText(currentLoadstring);
 
-    document.getElementById(
-        "status"
-    ).textContent =
+    document.getElementById("status").textContent =
         "Loadstring copied.";
 }
 
 async function copyUrl() {
 
-    if (!currentUrl)
-        return;
+    if (!currentUrl) return;
 
-    await navigator.clipboard
-        .writeText(
-            currentUrl
-        );
+    await navigator.clipboard.writeText(currentUrl);
 
-    document.getElementById(
-        "status"
-    ).textContent =
+    document.getElementById("status").textContent =
         "URL copied.";
 }
 
 function clearCode() {
 
-    document.getElementById(
-        "source"
-    ).value = "";
-
-    document.getElementById(
-        "result"
-    ).style.display =
-        "none";
-
-    document.getElementById(
-        "status"
-    ).textContent =
-        "Ready.";
+    document.getElementById("source").value = "";
+    document.getElementById("scriptName").value = "";
+    document.getElementById("result").style.display = "none";
+    document.getElementById("status").textContent = "Ready.";
 
     currentUrl = "";
-
     currentLoadstring = "";
+}
+
+/* ── scripts page ── */
+
+function renderScripts() {
+
+    const list =
+        document.getElementById("scriptList");
+
+    const empty =
+        document.getElementById("scriptEmpty");
+
+    fetch("/api/scripts")
+        .then(r => r.json())
+        .then(data => {
+
+            const scripts = data.scripts || [];
+
+            if (scripts.length === 0) {
+
+                list.innerHTML =
+                    '<div class="script-empty" id="scriptEmpty">No scripts yet. Go to Protector to add one.</div>';
+
+                return;
+            }
+
+            list.innerHTML = scripts.map(s => \`
+                <div class="script-item" id="item-\${s.id}">
+
+                    <div class="script-info">
+                        <div class="script-name">\${escHtml(s.name)}</div>
+                        <div class="script-meta">\${escHtml(s.url)}</div>
+                    </div>
+
+                    <div class="script-actions">
+
+                        <div class="toggle-wrap">
+
+                            <span class="toggle-label \${s.enabled ? 'enabled' : 'disabled'}" id="lbl-\${s.id}">
+                                \${s.enabled ? 'Enable' : 'Disable'}
+                            </span>
+
+                            <label class="toggle">
+                                <input
+                                    type="checkbox"
+                                    \${s.enabled ? 'checked' : ''}
+                                    onchange="toggleScript('\${s.id}', this.checked)"
+                                >
+                                <div class="toggle-track"></div>
+                                <div class="toggle-thumb"></div>
+                            </label>
+
+                        </div>
+
+                        <button
+                            class="btn-delete"
+                            onclick="deleteScript('\${s.id}')"
+                        >
+                            Delete
+                        </button>
+
+                    </div>
+
+                </div>
+            \`).join("");
+        })
+        .catch(() => {
+            list.innerHTML =
+                '<div class="script-empty">Failed to load scripts.</div>';
+        });
+}
+
+function toggleScript(id, enabled) {
+
+    fetch(\`/api/scripts/\${id}/toggle\`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+    })
+    .then(r => r.json())
+    .then(data => {
+
+        if (!data.success) return;
+
+        const lbl = document.getElementById("lbl-" + id);
+
+        if (lbl) {
+            lbl.textContent = enabled ? "Enable" : "Disable";
+            lbl.className =
+                "toggle-label " + (enabled ? "enabled" : "disabled");
+        }
+    });
+}
+
+function deleteScript(id) {
+
+    fetch(\`/api/scripts/\${id}\`, { method: "DELETE" })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                renderScripts();
+            }
+        });
+}
+
+function escHtml(v) {
+    return String(v)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 }
 
 </script>
@@ -1086,20 +1484,6 @@ function copyLoader() {
 }
 
 /* =================================================
-   HTML ESCAPER
-================================================= */
-
-function escapeHtml(value) {
-
-    return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-/* =================================================
    HOME
 ================================================= */
 
@@ -1121,6 +1505,12 @@ app.post(
 
         const source =
             req.body?.source;
+
+        const name =
+            typeof req.body?.name === "string" &&
+            req.body.name.trim()
+                ? req.body.name.trim()
+                : "Untitled Script";
 
         if (
             typeof source !==
@@ -1147,27 +1537,11 @@ app.post(
 
         try {
 
-            /*
-             * Source langsung diproses.
-             * Yang disimpan hanya hasil protect.
-             */
-
             const protectedSource =
                 protectLuau(source);
 
             const id =
                 generateId();
-
-            loaders.set(
-                id,
-                {
-                    source:
-                        protectedSource,
-
-                    createdAt:
-                        Date.now()
-                }
-            );
 
             const baseUrl =
                 `${req.protocol}://${req.get("host")}`;
@@ -1175,28 +1549,30 @@ app.post(
             const url =
                 `${baseUrl}/files/loaders/${id}.lua`;
 
+            loaders.set(
+                id,
+                {
+                    name:        name,
+                    source:      protectedSource,
+                    createdAt:   Date.now(),
+                    enabled:     true,
+                    url:         url
+                }
+            );
+
             const loadstring =
                 `loadstring(game:HttpGet("${url}"))()`;
 
             res.json({
-                success:
-                    true,
-
-                id:
-                    id,
-
-                url:
-                    url,
-
-                loadstring:
-                    loadstring
+                success:    true,
+                id:         id,
+                url:        url,
+                loadstring: loadstring
             });
 
         } catch (error) {
 
-            console.error(
-                error
-            );
+            console.error(error);
 
             res
                 .status(500)
@@ -1209,6 +1585,89 @@ app.post(
 );
 
 /* =================================================
+   LIST SCRIPTS API
+================================================= */
+
+app.get(
+    "/api/scripts",
+    (req, res) => {
+
+        const scripts = [];
+
+        for (const [id, item] of loaders.entries()) {
+            scripts.push({
+                id:        id,
+                name:      item.name,
+                url:       item.url,
+                enabled:   item.enabled,
+                createdAt: item.createdAt
+            });
+        }
+
+        /*
+           Newest first
+        */
+        scripts.sort(
+            (a, b) => b.createdAt - a.createdAt
+        );
+
+        res.json({ success: true, scripts });
+    }
+);
+
+/* =================================================
+   TOGGLE SCRIPT API
+================================================= */
+
+app.post(
+    "/api/scripts/:id/toggle",
+    (req, res) => {
+
+        const id   = req.params.id;
+        const item = loaders.get(id);
+
+        if (!item) {
+            return res
+                .status(404)
+                .json({ error: "Script not found." });
+        }
+
+        const enabled =
+            typeof req.body?.enabled === "boolean"
+                ? req.body.enabled
+                : !item.enabled;
+
+        item.enabled = enabled;
+
+        loaders.set(id, item);
+
+        res.json({ success: true, id, enabled });
+    }
+);
+
+/* =================================================
+   DELETE SCRIPT API
+================================================= */
+
+app.delete(
+    "/api/scripts/:id",
+    (req, res) => {
+
+        const id = req.params.id;
+
+        if (!loaders.has(id)) {
+            return res
+                .status(404)
+                .json({ error: "Script not found." });
+        }
+
+        loaders.delete(id);
+
+        res.json({ success: true, id });
+    }
+);
+
+/* =================================================
    LOADER
 ================================================= */
 
@@ -1216,34 +1675,25 @@ app.get(
     "/files/loaders/:id.lua",
     (req, res) => {
 
-        const id =
-            req.params.id;
-
-        const item =
-            loaders.get(id);
+        const id   = req.params.id;
+        const item = loaders.get(id);
 
         if (!item) {
 
             return res
                 .status(404)
                 .type("text")
-                .send(
-                    "Loader not found."
-                );
+                .send("Loader not found.");
         }
 
         const userAgent =
             String(
-                req.headers[
-                    "user-agent"
-                ] || ""
+                req.headers["user-agent"] || ""
             ).toLowerCase();
 
         const accept =
             String(
-                req.headers[
-                    "accept"
-                ] || ""
+                req.headers["accept"] || ""
             ).toLowerCase();
 
         /*
@@ -1252,37 +1702,20 @@ app.get(
 
         const isBrowser =
             (
-                userAgent.includes(
-                    "mozilla"
-                ) ||
-                userAgent.includes(
-                    "chrome"
-                ) ||
-                userAgent.includes(
-                    "safari"
-                ) ||
-                userAgent.includes(
-                    "firefox"
-                ) ||
-                userAgent.includes(
-                    "edg/"
-                ) ||
-                userAgent.includes(
-                    "opera"
-                )
+                userAgent.includes("mozilla") ||
+                userAgent.includes("chrome")  ||
+                userAgent.includes("safari")  ||
+                userAgent.includes("firefox") ||
+                userAgent.includes("edg/")    ||
+                userAgent.includes("opera")
             ) &&
             (
-                accept.includes(
-                    "text/html"
-                ) ||
-                accept.includes(
-                    "application/xhtml+xml"
-                )
+                accept.includes("text/html") ||
+                accept.includes("application/xhtml+xml")
             );
 
         /*
-         * Browser:
-         * NEVER send source.
+         * Browser: NEVER send source.
          */
 
         if (isBrowser) {
@@ -1293,33 +1726,35 @@ app.get(
             return res
                 .status(403)
                 .type("html")
+                .send(browserPage(id, baseUrl));
+        }
+
+        /*
+         * Disabled check.
+         * If script is disabled, executor gets an error.
+         */
+
+        if (!item.enabled) {
+
+            return res
+                .status(403)
+                .type("text")
                 .send(
-                    browserPage(
-                        id,
-                        baseUrl
-                    )
+                    "-- KXLuaprotect: This script is currently disabled.\n" +
+                    "error('Script disabled by owner.')"
                 );
         }
 
         /*
-         * Runtime/non-browser:
-         * Send protected source.
+         * Runtime/non-browser: Send protected source.
          */
 
         res
             .status(200)
             .type("text/plain")
-            .set(
-                "Cache-Control",
-                "no-store, no-cache, must-revalidate"
-            )
-            .set(
-                "Pragma",
-                "no-cache"
-            )
-            .send(
-                item.source
-            );
+            .set("Cache-Control", "no-store, no-cache, must-revalidate")
+            .set("Pragma", "no-cache")
+            .send(item.source);
     }
 );
 
@@ -1378,10 +1813,8 @@ p {
 app.listen(
     PORT,
     () => {
-
         console.log(
             `KXLuaprotect running on port ${PORT}`
         );
-
     }
 );
