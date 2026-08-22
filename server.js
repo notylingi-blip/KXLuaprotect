@@ -1177,20 +1177,20 @@ function browserPage(id, baseUrl) {
 
 * {
     box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 body {
-
-    margin: 0;
 
     min-height: 100vh;
 
     background:
         radial-gradient(
             circle at top,
-            #082b4b 0%,
-            #031525 55%,
-            #020e19 100%
+            #26133e 0%,
+            #0b0910 45%,
+            #050507 100%
         );
 
     color: white;
@@ -1199,203 +1199,171 @@ body {
         Arial,
         sans-serif;
 
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    padding:
-        20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
 .card {
 
-    width:
-        min(680px,100%);
+    width: min(680px, 100%);
 
-    padding:
-        45px 28px;
+    padding: 40px 28px;
 
-    border-radius:
-        18px;
+    border-radius: 18px;
 
-    background:
-        rgba(5,28,47,.78);
+    background: rgba(14,13,19,.96);
 
-    border:
-        1px solid
-        rgba(70,170,255,.18);
+    border: 1px solid #2b2535;
 
-    text-align:
-        center;
+    text-align: center;
 
     box-shadow:
-        0 25px 80px
-        rgba(0,0,0,.45);
+        0 25px 80px rgba(0,0,0,.5);
 }
 
 .icon {
-
-    font-size:
-        42px;
-
-    margin-bottom:
-        15px;
+    font-size: 40px;
+    margin-bottom: 14px;
 }
 
 h1 {
 
-    margin:
-        0;
-
-    color:
-        #159cff;
-
-    font-size:
-        28px;
-
-    line-height:
-        1.2;
+    color: #c9a8ff;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1.25;
+    letter-spacing: -0.3px;
 }
 
 p {
 
-    color:
-        #9aaebb;
-
-    line-height:
-        1.6;
-
-    margin:
-        12px auto 25px;
-
-    max-width:
-        560px;
+    color: #7a7085;
+    line-height: 1.6;
+    margin: 12px auto 22px;
+    max-width: 520px;
+    font-size: 14px;
 }
+
+/* ── loader box ── */
 
 .loader {
 
-    text-align:
-        left;
+    text-align: left;
 
-    background:
-        #020b13;
+    background: #08080c;
 
-    border:
-        1px solid #183247;
+    border: 1px solid #302a39;
 
-    border-radius:
-        12px;
+    border-radius: 12px;
 
-    padding:
-        15px;
-
-    overflow:
-        hidden;
+    padding: 14px 15px;
 }
 
 .loader-title {
 
-    color:
-        #7f96a8;
+    color: #6b6076;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    margin-bottom: 9px;
+}
 
-    font-size:
-        12px;
+.loader-scroll {
 
-    font-weight:
-        bold;
+    overflow-x: auto;
+    cursor: grab;
 
-    margin-bottom:
-        8px;
+    /* scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: #3a2f47 #08080c;
+}
+
+.loader-scroll:active {
+    cursor: grabbing;
+}
+
+.loader-scroll::-webkit-scrollbar {
+    height: 5px;
+}
+
+.loader-scroll::-webkit-scrollbar-track {
+    background: #08080c;
+    border-radius: 99px;
+}
+
+.loader-scroll::-webkit-scrollbar-thumb {
+    background: #3a2f47;
+    border-radius: 99px;
+}
+
+.loader-scroll::-webkit-scrollbar-thumb:hover {
+    background: #5c4a72;
 }
 
 .loader-code {
 
-    color:
-        #d8e6f0;
+    color: #b897ff;
 
     font-family:
         Consolas,
         monospace;
 
-    font-size:
-        13px;
+    font-size: 13px;
 
-    white-space:
-        nowrap;
+    white-space: nowrap;
 
-    overflow:
-        hidden;
+    display: inline-block;
 
-    text-overflow:
-        ellipsis;
+    min-width: 100%;
 }
+
+/* ── copy button ── */
 
 button {
 
-    width:
-        100%;
-
-    margin-top:
-        14px;
-
-    border:
-        0;
-
-    border-radius:
-        10px;
-
-    padding:
-        13px;
-
-    background:
-        #079bf3;
-
-    color:
-        white;
-
-    font-weight:
-        bold;
-
-    cursor:
-        pointer;
+    width: 100%;
+    margin-top: 14px;
+    border: 0;
+    border-radius: 10px;
+    padding: 13px;
+    background: #8051f5;
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: filter .12s;
 }
 
 button:hover {
-
-    filter:
-        brightness(1.1);
+    filter: brightness(1.12);
 }
+
+/* ── note ── */
 
 .note {
 
-    margin-top:
-        18px;
-
-    color:
-        #6f8291;
-
-    font-size:
-        12px;
-
-    line-height:
-        1.5;
+    margin-top: 16px;
+    color: #4e4558;
+    font-size: 12px;
+    line-height: 1.55;
 }
+
+/* ── brand ── */
 
 .brand {
 
-    margin-top:
-        20px;
+    margin-top: 18px;
+    color: #2e2a33;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .3px;
+}
 
-    color:
-        #36556b;
-
-    font-size:
-        11px;
+.brand span {
+    color: #4a3566;
 }
 
 </style>
@@ -1406,13 +1374,9 @@ button:hover {
 
 <div class="card">
 
-<div class="icon">
-🔒
-</div>
+<div class="icon">🔒</div>
 
-<h1>
-This script can't be viewed in a browser
-</h1>
+<h1>This script can't be viewed in a browser</h1>
 
 <p>
 For security, the source is only delivered
@@ -1422,18 +1386,16 @@ in your executor or script.
 
 <div class="loader">
 
-<div class="loader-title">
-LOADER
+<div class="loader-title">LOADER</div>
+
+<div class="loader-scroll" id="loaderScroll">
+<div class="loader-code" id="loaderCode">${escapeHtml(loader)}</div>
 </div>
 
-<div class="loader-code">
-${escapeHtml(loader)}
 </div>
 
-</div>
-
-<button onclick="copyLoader()">
-Copy loader
+<button id="copyBtn" onclick="copyLoader()">
+📋 Copy Loader
 </button>
 
 <div class="note">
@@ -1442,37 +1404,71 @@ fetch and run the script in-game.
 </div>
 
 <div class="brand">
-KXLuaprotect
+KX<span>Luaprotect</span>
 </div>
 
 </div>
 
 <script>
 
+/* ── drag to scroll ── */
+
+const scroll = document.getElementById("loaderScroll");
+
+let isDown  = false;
+let startX  = 0;
+let scrollL = 0;
+
+scroll.addEventListener("mousedown", (e) => {
+    isDown  = true;
+    startX  = e.pageX - scroll.offsetLeft;
+    scrollL = scroll.scrollLeft;
+});
+
+document.addEventListener("mouseup", () => {
+    isDown = false;
+});
+
+document.addEventListener("mousemove", (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x    = e.pageX - scroll.offsetLeft;
+    const walk = (x - startX) * 1.4;
+    scroll.scrollLeft = scrollL - walk;
+});
+
+/* touch drag */
+
+let touchStartX  = 0;
+let touchScrollL = 0;
+
+scroll.addEventListener("touchstart", (e) => {
+    touchStartX  = e.touches[0].pageX;
+    touchScrollL = scroll.scrollLeft;
+}, { passive: true });
+
+scroll.addEventListener("touchmove", (e) => {
+    const x    = e.touches[0].pageX;
+    const walk = touchStartX - x;
+    scroll.scrollLeft = touchScrollL + walk;
+}, { passive: true });
+
+/* ── copy ── */
+
 function copyLoader() {
 
-    const loader =
-        ${JSON.stringify(loader)};
+    const loader = ${JSON.stringify(loader)};
+    const btn    = document.getElementById("copyBtn");
 
-    navigator.clipboard
-        .writeText(loader)
-        .then(() => {
+    navigator.clipboard.writeText(loader).then(() => {
 
-            document.querySelector(
-                "button"
-            ).textContent =
-                "Copied!";
+        btn.textContent = "✅ Copied!";
 
-            setTimeout(() => {
+        setTimeout(() => {
+            btn.textContent = "📋 Copy Loader";
+        }, 1500);
 
-                document.querySelector(
-                    "button"
-                ).textContent =
-                    "Copy loader";
-
-            }, 1500);
-
-        });
+    });
 }
 
 </script>
