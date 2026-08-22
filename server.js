@@ -6,60 +6,182 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: "5mb" }));
 
-// Temporary server-side storage.
-// Do not expose this directly through an API.
+/*
+    KXLuaprotect
+    -------------------------
+    - Source asli tidak disediakan
+      melalui endpoint publik.
+    - Setiap protect menghasilkan ID acak.
+    - Loader hanya berisi hasil transformasi.
+    - Loader dapat dicabut dengan endpoint
+      admin lokal menggunakan ADMIN_KEY.
+*/
+
 const loaders = new Map();
 
-function makeId() {
-    return crypto.randomBytes(18).toString("hex");
+const ADMIN_KEY =
+    process.env.ADMIN_KEY || "change-this-key";
+
+/* =========================
+   ID GENERATOR
+========================= */
+
+function createId() {
+    return crypto
+        .randomBytes(24)
+        .toString("hex");
 }
+
+/* =========================
+   STRING-SAFE TRANSFORMER
+========================= */
 
 function transformLuau(source) {
     let code = String(source);
 
-    // Remove block comments.
+    /*
+       Remove block comments.
+    */
     code = code.replace(
         /--\[\[[\s\S]*?\]\]/g,
         ""
     );
 
-    // Remove single-line comments while preserving strings.
-    code = code.replace(
-        /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(--[^\r\n]*)/g,
-        (match, stringValue) => stringValue || ""
-    );
+    /*
+       Remove -- comments without
+       touching quoted strings.
+    */
+    let output = "";
+    let i = 0;
 
-    // Normalize whitespace.
+    while (i < code.length) {
+
+        const c = code[i];
+
+        /*
+           Double quoted string
+        */
+        if (c === '"') {
+
+            let j = i + 1;
+
+            while (j < code.length) {
+
+                if (code[j] === "\\") {
+                    j += 2;
+                    continue;
+                }
+
+                if (code[j] === '"') {
+                    j++;
+                    break;
+                }
+
+                j++;
+            }
+
+            output += code.slice(i, j);
+            i = j;
+            continue;
+        }
+
+        /*
+           Single quoted string
+        */
+        if (c === "'") {
+
+            let j = i + 1;
+
+            while (j < code.length) {
+
+                if (code[j] === "\\") {
+                    j += 2;
+                    continue;
+                }
+
+                if (code[j] === "'") {
+                    j++;
+                    break;
+                }
+
+                j++;
+            }
+
+            output += code.slice(i, j);
+            i = j;
+            continue;
+        }
+
+        /*
+           Single-line comment
+        */
+        if (c === "-" && code[i + 1] === "-") {
+
+            while (
+                i < code.length &&
+                code[i] !== "\n"
+            ) {
+                i++;
+            }
+
+            output += "\n";
+            continue;
+        }
+
+        output += c;
+        i++;
+    }
+
+    code = output;
+
+    /*
+       Normalize line endings.
+    */
     code = code.replace(/\r\n/g, "\n");
-    code = code.replace(/[ \t]+/g, " ");
-    code = code.replace(
-        /[ \t]*\n[ \t]*/g,
-        "\n"
-    );
 
-    // Remove unnecessary blank lines.
+    /*
+       Remove trailing spaces.
+    */
     code = code
         .split("\n")
-        .map(line => line.trim())
-        .filter(Boolean)
+        .map(line => line.trimEnd())
         .join("\n");
 
-    return `-- KXLuaprotect
--- Protected source
+    /*
+       Collapse excessive blank lines.
+    */
+    code = code.replace(
+        /\n{3,}/g,
+        "\n\n"
+    );
 
-${code}
-`;
+    /*
+       Add KXLuaprotect marker.
+    */
+    return (
+        "-- KXLuaprotect\n" +
+        "-- Protected loader\n\n" +
+        code.trim() +
+        "\n"
+    );
 }
+
+/* =========================
+   HTML
+========================= */
 
 const HTML = `
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
 
 <meta charset="UTF-8">
+
 <meta
     name="viewport"
-    content="width=device-width,initial-scale=1"
+    content="width=device-width, initial-scale=1"
 >
 
 <title>KXLuaprotect</title>
@@ -73,127 +195,181 @@ const HTML = `
 body {
     margin: 0;
     min-height: 100vh;
+
     background:
         radial-gradient(
             circle at top,
-            #24153d,
-            #0b0a0f 45%,
-            #050507
+            #27153f 0%,
+            #0c0a10 45%,
+            #050507 100%
         );
+
     color: white;
-    font-family: Arial, sans-serif;
+
+    font-family:
+        Arial,
+        sans-serif;
 }
 
 .container {
-    width: min(1050px, 94%);
+    width: min(1100px, 94%);
     margin: auto;
     padding: 40px 0;
 }
 
 .header {
     text-align: center;
-    margin-bottom: 28px;
+    margin-bottom: 30px;
 }
 
 .logo {
-    font-size: 42px;
+    font-size: 43px;
     font-weight: 900;
+    letter-spacing: -1px;
 }
 
 .logo span {
-    color: #9665ff;
+    color: #9564ff;
 }
 
 .subtitle {
-    color: #77727e;
+    color: #77727f;
     margin-top: 8px;
+    font-size: 14px;
 }
 
 .card {
-    background: rgba(15,14,20,.96);
-    border: 1px solid #292431;
+    background: rgba(14, 13, 19, .96);
+
+    border:
+        1px solid #2b2534;
+
     border-radius: 18px;
+
     padding: 18px;
+
+    box-shadow:
+        0 20px 70px
+        rgba(0,0,0,.4);
+}
+
+.label {
+    color: #aaa4b1;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
 }
 
 textarea {
     width: 100%;
-    height: 400px;
+    height: 390px;
+
     resize: vertical;
+
     background: #08080c;
-    color: #e7e3eb;
-    border: 1px solid #302a38;
+    color: #e9e5ed;
+
+    border:
+        1px solid #302a39;
+
     border-radius: 12px;
+
     padding: 15px;
+
     outline: none;
-    font-family: Consolas, monospace;
+
+    font-family:
+        Consolas,
+        monospace;
+
     font-size: 13px;
+    line-height: 1.55;
 }
 
 textarea:focus {
-    border-color: #895cff;
+    border-color: #8757ff;
 }
 
 .buttons {
     display: flex;
     gap: 10px;
+
     margin-top: 15px;
 }
 
 button {
     border: 0;
     border-radius: 10px;
+
     padding: 12px 18px;
+
     color: white;
-    font-weight: bold;
+
+    font-weight: 700;
+
     cursor: pointer;
 }
 
 .protect {
-    background: #8051f5;
     flex: 1;
+    background: #8051f5;
 }
 
-.clear {
-    background: #25202b;
+.secondary {
+    background: #25202c;
+}
+
+button:hover {
+    filter: brightness(1.12);
 }
 
 .result {
     display: none;
-    margin-top: 20px;
+    margin-top: 22px;
 }
 
-.resultBox {
+.result-box {
     background: #08080c;
-    border: 1px solid #302a38;
-    border-radius: 12px;
-    padding: 14px;
-    font-family: Consolas, monospace;
-    font-size: 13px;
-    color: #b89dff;
-    word-break: break-all;
-}
 
-.copy {
-    margin-top: 10px;
-    background: #25202b;
+    border:
+        1px solid #302a39;
+
+    border-radius: 12px;
+
+    padding: 14px;
+
+    color: #b795ff;
+
+    font-family:
+        Consolas,
+        monospace;
+
+    font-size: 13px;
+
+    word-break: break-all;
 }
 
 .status {
     text-align: center;
-    color: #77717e;
+
+    color: #706a78;
+
     font-size: 12px;
+
     margin-top: 15px;
 }
 
 .footer {
     text-align: center;
+
     color: #514c58;
+
     font-size: 12px;
-    margin-top: 20px;
+
+    margin-top: 22px;
 }
 
-@media(max-width:600px) {
+@media(max-width:650px) {
 
     .logo {
         font-size: 34px;
@@ -230,6 +406,10 @@ Luau Protection Service
 
 <div class="card">
 
+<div class="label">
+SOURCE
+</div>
+
 <textarea
 id="source"
 spellcheck="false"
@@ -246,8 +426,8 @@ onclick="protectCode()"
 </button>
 
 <button
-class="clear"
-onclick="clearAll()"
+class="secondary"
+onclick="clearCode()"
 >
 Clear
 </button>
@@ -259,21 +439,32 @@ class="result"
 id="result"
 >
 
-<div style="color:#888;margin-bottom:8px">
+<div class="label">
 LOADSTRING
 </div>
 
 <div
-class="resultBox"
+class="result-box"
 id="loadstring"
 ></div>
 
+<div class="buttons">
+
 <button
-class="copy"
+class="secondary"
 onclick="copyLoadstring()"
 >
 📋 Copy Loadstring
 </button>
+
+<button
+class="secondary"
+onclick="copyUrl()"
+>
+🔗 Copy URL
+</button>
+
+</div>
 
 </div>
 
@@ -294,7 +485,8 @@ KXLuaprotect
 
 <script>
 
-let currentLoadstring = "";
+let loaderUrl = "";
+let loaderString = "";
 
 async function protectCode() {
 
@@ -332,9 +524,10 @@ async function protectCode() {
                             "application/json"
                     },
 
-                    body: JSON.stringify({
-                        source
-                    })
+                    body:
+                        JSON.stringify({
+                            source: source
+                        })
                 }
             );
 
@@ -348,13 +541,13 @@ async function protectCode() {
             );
         }
 
-        currentLoadstring =
-            data.loadstring;
+        loaderUrl = data.url;
+        loaderString = data.loadstring;
 
         document.getElementById(
             "loadstring"
         ).textContent =
-            currentLoadstring;
+            loaderString;
 
         document.getElementById(
             "result"
@@ -368,16 +561,17 @@ async function protectCode() {
 
         status.textContent =
             error.message;
+
     }
 }
 
 async function copyLoadstring() {
 
-    if (!currentLoadstring)
+    if (!loaderString)
         return;
 
     await navigator.clipboard
-        .writeText(currentLoadstring);
+        .writeText(loaderString);
 
     document.getElementById(
         "status"
@@ -385,7 +579,21 @@ async function copyLoadstring() {
         "Loadstring copied.";
 }
 
-function clearAll() {
+async function copyUrl() {
+
+    if (!loaderUrl)
+        return;
+
+    await navigator.clipboard
+        .writeText(loaderUrl);
+
+    document.getElementById(
+        "status"
+    ).textContent =
+        "URL copied.";
+}
+
+function clearCode() {
 
     document.getElementById(
         "source"
@@ -401,105 +609,200 @@ function clearAll() {
     ).textContent =
         "Ready.";
 
-    currentLoadstring = "";
+    loaderUrl = "";
+    loaderString = "";
 }
 
 </script>
 
 </body>
+
 </html>
 `;
 
+/* =========================
+   WEB PAGE
+========================= */
+
 app.get("/", (req, res) => {
-    res.type("html").send(HTML);
+
+    res
+        .type("html")
+        .send(HTML);
+
 });
 
-app.post("/api/protect", (req, res) => {
+/* =========================
+   PROTECT
+========================= */
 
-    const source = req.body?.source;
+app.post(
+    "/api/protect",
+    (req, res) => {
 
-    if (typeof source !== "string") {
+        const source =
+            req.body?.source;
 
-        return res.status(400).json({
-            error: "Invalid Luau source."
-        });
+        if (
+            typeof source !==
+            "string"
+        ) {
+
+            return res.status(400)
+                .json({
+                    error:
+                        "Invalid source."
+                });
+        }
+
+        if (!source.trim()) {
+
+            return res.status(400)
+                .json({
+                    error:
+                        "Source is empty."
+                });
+        }
+
+        try {
+
+            /*
+               Original source is transformed
+               immediately and never exposed
+               through a public endpoint.
+            */
+
+            const protectedSource =
+                transformLuau(source);
+
+            const id =
+                createId();
+
+            loaders.set(
+                id,
+                {
+                    source:
+                        protectedSource,
+
+                    createdAt:
+                        Date.now()
+                }
+            );
+
+            const baseUrl =
+                `${req.protocol}://${req.get("host")}`;
+
+            const url =
+                `${baseUrl}/files/loaders/${id}.lua`;
+
+            const loadstring =
+                `loadstring(game:HttpGet("${url}"))()`;
+
+            res.json({
+                success: true,
+                url: url,
+                loadstring: loadstring
+            });
+
+        } catch (error) {
+
+            console.error(error);
+
+            res.status(500)
+                .json({
+                    error:
+                        "Protection failed."
+                });
+        }
     }
+);
 
-    if (!source.trim()) {
+/* =========================
+   LOADER
+========================= */
 
-        return res.status(400).json({
-            error: "Source is empty."
-        });
-    }
-
-    try {
-
-        const protectedSource =
-            transformLuau(source);
-
-        const id = makeId();
-
-        loaders.set(
-            id,
-            protectedSource
-        );
-
-        const baseUrl =
-            `${req.protocol}://${req.get("host")}`;
-
-        const url =
-            `${baseUrl}/files/loaders/${id}.lua`;
-
-        const loadstring =
-            `loadstring(game:HttpGet("${url}"))()`;
-
-        res.json({
-            success: true,
-            loadstring
-        });
-
-    } catch (error) {
-
-        console.error(error);
-
-        res.status(500).json({
-            error:
-                "Unable to protect source."
-        });
-    }
-});
-
-// Loader endpoint.
-// It returns only the transformed source.
-// It does NOT return the original source.
 app.get(
     "/files/loaders/:id.lua",
     (req, res) => {
 
-        const source =
-            loaders.get(req.params.id);
-
-        if (!source) {
-
-            return res.status(404).send(
-                "Loader not found."
+        const item =
+            loaders.get(
+                req.params.id
             );
+
+        if (!item) {
+
+            return res
+                .status(404)
+                .send(
+                    "Loader not found."
+                );
         }
+
+        /*
+           Only transformed source is returned.
+           The original source is not stored
+           separately in this application.
+        */
 
         res
             .type("text/plain")
-            .send(source);
+            .set(
+                "Cache-Control",
+                "no-store"
+            )
+            .send(item.source);
     }
 );
 
-// No endpoint exists for retrieving
-// the original source.
+/* =========================
+   REVOKE LOADER
+========================= */
 
-app.listen(PORT, () => {
+app.delete(
+    "/api/loaders/:id",
+    (req, res) => {
 
-    console.log(
-        "KXLuaprotect running on port " +
-        PORT
-    );
+        const key =
+            req.headers[
+                "x-admin-key"
+            ];
 
-});
+        if (
+            key !== ADMIN_KEY
+        ) {
+
+            return res
+                .status(403)
+                .json({
+                    error:
+                        "Unauthorized."
+                });
+        }
+
+        const deleted =
+            loaders.delete(
+                req.params.id
+            );
+
+        res.json({
+            success: deleted
+        });
+    }
+);
+
+/* =========================
+   START
+========================= */
+
+app.listen(
+    PORT,
+    () => {
+
+        console.log(
+            "KXLuaprotect running on port " +
+            PORT
+        );
+
+    }
+);
