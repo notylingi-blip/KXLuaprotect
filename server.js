@@ -8,261 +8,208 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: "5mb" }));
 
-/*
-==================================================
- KXLuaprotect
-==================================================
-
- Browser:
-   /files/loaders/ID.lua
-          ↓
-   Security page
-   "This script can't be viewed in a browser"
-
- Runtime request:
-   /files/loaders/ID.lua
-          ↓
-   Protected Luau (only if enabled)
-
-==================================================
-*/
-
-/* =================================================
-   PERSISTENCE — Railway Volume at /data
-   Falls back to ./data if volume not mounted
-================================================= */
-
 const DATA_DIR  = fs.existsSync("/data") ? "/data" : nodePath.join(__dirname, "data");
 const DATA_FILE = nodePath.join(DATA_DIR, "scripts.json");
 
 if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 function loadFromDisk() {
-    try {
-        if (fs.existsSync(DATA_FILE)) {
-            const raw = fs.readFileSync(DATA_FILE, "utf8");
-            const obj = JSON.parse(raw);
-            const map = new Map();
-            for (const [k, v] of Object.entries(obj)) {
-                map.set(k, v);
-            }
-            console.log("Loaded " + map.size + " scripts from disk.");
-            return map;
-        }
-    } catch (e) {
-        console.error("Failed to load scripts from disk:", e.message);
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, "utf8");
+      const obj = JSON.parse(raw);
+      const map = new Map();
+      for (const [k, v] of Object.entries(obj)) {
+        map.set(k, v);
+      }
+      console.log("Loaded " + map.size + " scripts from disk.");
+      return map;
     }
-    return new Map();
+  } catch (e) {
+    console.error("Failed to load scripts from disk:", e.message);
+  }
+  return new Map();
 }
 
 function saveToDisk(map) {
-    try {
-        const obj = {};
-        for (const [k, v] of map.entries()) {
-            obj[k] = v;
-        }
-        fs.writeFileSync(DATA_FILE, JSON.stringify(obj, null, 2), "utf8");
-    } catch (e) {
-        console.error("Failed to save scripts to disk:", e.message);
+  try {
+    const obj = {};
+    for (const [k, v] of map.entries()) {
+      obj[k] = v;
     }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(obj, null, 2), "utf8");
+  } catch (e) {
+    console.error("Failed to save scripts to disk:", e.message);
+  }
 }
 
 const loaders = loadFromDisk();
 
-
-/* =================================================
-   ID GENERATOR
-================================================= */
-
 function generateId() {
-    return crypto
-        .randomBytes(18)
-        .toString("hex");
+  return crypto.randomBytes(18).toString("hex");
 }
-
-/* =================================================
-   BASIC LUALU TRANSFORMER
-================================================= */
 
 function protectLuau(source) {
 
-    let code = String(source);
+  let code = String(source);
+
+  /*
+     Remove block comments
+  */
+  code = code.replace(
+    /--\[[\s\S]*?\]/g,
+    ""
+  );
+
+  /*
+     Remove single-line comments
+     without touching strings.
+  */
+
+  let output = "";
+  let i = 0;
+
+  while (i < code.length) {
+
+    const char = code[i];
 
     /*
-       Remove block comments
+       Double quote
     */
-    code = code.replace(
-        /--\[\[[\s\S]*?\]\]/g,
-        ""
-    );
+    if (char === '"') {
 
-    /*
-       Remove single-line comments
-       without touching strings.
-    */
+      let j = i + 1;
 
-    let output = "";
-    let i = 0;
+      while (j < code.length) {
 
-    while (i < code.length) {
-
-        const char = code[i];
-
-        /*
-           Double quote
-        */
-        if (char === '"') {
-
-            let j = i + 1;
-
-            while (j < code.length) {
-
-                if (code[j] === "\\") {
-                    j += 2;
-                    continue;
-                }
-
-                if (code[j] === '"') {
-                    j++;
-                    break;
-                }
-
-                j++;
-            }
-
-            output += code.slice(i, j);
-
-            i = j;
-
-            continue;
+        if (code[j] === "\\") {
+          j += 2;
+          continue;
         }
 
-        /*
-           Single quote
-        */
-        if (char === "'") {
-
-            let j = i + 1;
-
-            while (j < code.length) {
-
-                if (code[j] === "\\") {
-                    j += 2;
-                    continue;
-                }
-
-                if (code[j] === "'") {
-                    j++;
-                    break;
-                }
-
-                j++;
-            }
-
-            output += code.slice(i, j);
-
-            i = j;
-
-            continue;
+        if (code[j] === '"') {
+          j++;
+          break;
         }
 
-        /*
-           Comment
-        */
-        if (
-            char === "-" &&
-            code[i + 1] === "-"
-        ) {
+        j++;
+      }
 
-            while (
-                i < code.length &&
-                code[i] !== "\n"
-            ) {
-                i++;
-            }
+      output += code.slice(i, j);
 
-            output += "\n";
+      i = j;
 
-            continue;
-        }
-
-        output += char;
-
-        i++;
+      continue;
     }
 
-    code = output;
+    /*
+       Single quote
+    */
+    if (char === "'") {
+
+      let j = i + 1;
+
+      while (j < code.length) {
+
+        if (code[j] === "\\") {
+          j += 2;
+          continue;
+        }
+
+        if (code[j] === "'") {
+          j++;
+          break;
+        }
+
+        j++;
+      }
+
+      output += code.slice(i, j);
+
+      i = j;
+
+      continue;
+    }
 
     /*
-       Normalize line endings
+       Comment
     */
-    code = code.replace(
-        /\r\n/g,
-        "\n"
-    );
+    if (
+      char === "-" &&
+      code[i + 1] === "-"
+    ) {
 
-    /*
-       Remove trailing spaces
-    */
-    code = code
-        .split("\n")
-        .map(line => line.trimEnd())
-        .join("\n");
+      while (
+        i < code.length &&
+        code[i] !== "\n"
+      ) {
+        i++;
+      }
 
-    /*
-       Remove excessive blank lines
-    */
-    code = code.replace(
-        /\n{3,}/g,
-        "\n\n"
-    );
+      output += "\n";
 
-    /*
-       Add KXLuaprotect marker
-    */
-    return (
-        "-- KXLuaprotect Protected\n\n" +
-        code.trim() +
-        "\n"
-    );
+      continue;
+    }
+
+    output += char;
+
+    i++;
+  }
+
+  code = output;
+
+  /*
+     Normalize line endings
+  */
+  code = code.replace(
+    /\r\n/g,
+    "\n"
+  );
+
+  /*
+     Remove trailing spaces
+  */
+  code = code
+    .split("\n")
+    .map(line => line.trimEnd())
+    .join("\n");
+
+  /*
+     Remove excessive blank lines
+  */
+  code = code.replace(
+    /\n{3,}/g,
+    "\n\n"
+  );
+
+  /*
+     Add KXLuaprotect marker
+  */
+  return (
+    "-- KXLuaprotect Protected\n\n" +
+    code.trim() +
+    "\n"
+  );
 }
-
-/* =================================================
-   HTML ESCAPER
-================================================= */
 
 function escapeHtml(value) {
-
-    return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
-
-/* =================================================
-   HOME PAGE
-================================================= */
 
 const HOME_PAGE = `
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta
-    name="viewport"
-    content="width=device-width,initial-scale=1"
->
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KXLuaprotect</title>
-
 <style>
 
 * {
@@ -272,9 +219,7 @@ const HOME_PAGE = `
 }
 
 body {
-
     min-height: 100vh;
-
     background:
         radial-gradient(
             circle at top,
@@ -282,9 +227,7 @@ body {
             #0b0910 45%,
             #050507 100%
         );
-
     color: white;
-
     font-family:
         Arial,
         sans-serif;
@@ -293,22 +236,16 @@ body {
 /* ── TOP BAR ── */
 
 .topbar {
-
     display: flex;
     align-items: center;
     gap: 14px;
-
     padding: 14px 20px;
-
     border-bottom:
         1px solid #1e1827;
-
     background:
         rgba(10,9,14,.85);
-
     backdrop-filter:
         blur(8px);
-
     position: sticky;
     top: 0;
     z-index: 100;
@@ -321,7 +258,6 @@ body {
 }
 
 .menu-btn {
-
     background: none;
     border: none;
     color: #9d94a8;
@@ -340,22 +276,17 @@ body {
 }
 
 .dropdown {
-
     display: none;
     position: absolute;
     left: 0;
     top: calc(100% + 6px);
-
     background: #100e18;
     border: 1px solid #2b2337;
     border-radius: 11px;
     overflow: hidden;
-
     min-width: 170px;
-
     box-shadow:
         0 12px 40px rgba(0,0,0,.55);
-
     z-index: 200;
 }
 
@@ -364,17 +295,13 @@ body {
 }
 
 .dropdown-item {
-
     display: flex;
     align-items: center;
     gap: 10px;
-
     padding: 11px 16px;
-
     color: #c0b8cc;
     font-size: 14px;
     cursor: pointer;
-
     transition: background .12s;
 }
 
@@ -392,7 +319,6 @@ body {
 /* ── LOGO ── */
 
 .logo {
-
     font-size: 22px;
     font-weight: 900;
     letter-spacing: -0.5px;
@@ -406,7 +332,6 @@ body {
 /* ── CONTAINER ── */
 
 .container {
-
     width: min(1100px, 94%);
     margin: auto;
     padding: 36px 0 60px;
@@ -415,7 +340,6 @@ body {
 /* ── CARD ── */
 
 .card {
-
     background: rgba(14,13,19,.96);
     border: 1px solid #2b2535;
     border-radius: 18px;
@@ -424,7 +348,6 @@ body {
 }
 
 .label {
-
     color: #aaa4b1;
     font-size: 12px;
     font-weight: 700;
@@ -446,19 +369,16 @@ body {
 /* ── PAGE HEADER ── */
 
 .page-header {
-
     margin-bottom: 22px;
 }
 
 .page-title {
-
     font-size: 20px;
     font-weight: 800;
     color: #e8e0f2;
 }
 
 .page-sub {
-
     color: #6e6679;
     font-size: 13px;
     margin-top: 4px;
@@ -467,7 +387,6 @@ body {
 /* ── INPUTS ── */
 
 input[type="text"] {
-
     width: 100%;
     background: #08080c;
     color: #e8e4ed;
@@ -489,7 +408,6 @@ input[type="text"]::placeholder {
 }
 
 textarea {
-
     width: 100%;
     height: 340px;
     resize: vertical;
@@ -553,14 +471,12 @@ textarea:focus {
 /* ── BUTTONS ── */
 
 .buttons {
-
     display: flex;
     gap: 10px;
     margin-top: 15px;
 }
 
 button {
-
     border: 0;
     border-radius: 10px;
     padding: 12px 18px;
@@ -572,7 +488,6 @@ button {
 }
 
 .btn-protect {
-
     flex: 1;
     background: #8051f5;
 }
@@ -588,13 +503,11 @@ button:hover {
 /* ── RESULT BOX ── */
 
 .result {
-
     display: none;
     margin-top: 22px;
 }
 
 .resultBox {
-
     background: #08080c;
     border: 1px solid #302a39;
     border-radius: 12px;
@@ -608,7 +521,6 @@ button:hover {
 /* ── STATUS ── */
 
 .status {
-
     text-align: center;
     color: #746e7c;
     font-size: 12px;
@@ -618,14 +530,12 @@ button:hover {
 /* ── SCRIPT LIST ── */
 
 .script-list {
-
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
 .script-empty {
-
     text-align: center;
     color: #4a4452;
     font-size: 14px;
@@ -633,12 +543,10 @@ button:hover {
 }
 
 .script-item {
-
     background: #0d0c14;
     border: 1px solid #26203080;
     border-radius: 13px;
     padding: 15px 18px;
-
     display: flex;
     align-items: center;
     gap: 14px;
@@ -650,7 +558,6 @@ button:hover {
 }
 
 .script-name {
-
     font-size: 15px;
     font-weight: 700;
     color: #ddd6e8;
@@ -660,7 +567,6 @@ button:hover {
 }
 
 .script-meta {
-
     font-size: 12px;
     color: #58525f;
     margin-top: 3px;
@@ -679,14 +585,12 @@ button:hover {
 /* ── TOGGLE ── */
 
 .toggle-wrap {
-
     display: flex;
     align-items: center;
     gap: 7px;
 }
 
 .toggle-label {
-
     font-size: 12px;
     font-weight: 700;
     min-width: 52px;
@@ -701,7 +605,6 @@ button:hover {
 }
 
 .toggle {
-
     position: relative;
     width: 38px;
     height: 21px;
@@ -716,7 +619,6 @@ button:hover {
 }
 
 .toggle-track {
-
     position: absolute;
     inset: 0;
     background: #2b2338;
@@ -729,7 +631,6 @@ button:hover {
 }
 
 .toggle-thumb {
-
     position: absolute;
     left: 3px;
     top: 3px;
@@ -746,7 +647,6 @@ button:hover {
 }
 
 .btn-delete {
-
     background: #1e0f1a;
     border: 1px solid #3d1f2f;
     color: #c06070;
@@ -759,7 +659,6 @@ button:hover {
 }
 
 .btn-delete:hover {
-
     background: #3d1020;
     color: #f07080;
     filter: none;
@@ -768,7 +667,6 @@ button:hover {
 /* ── FOOTER ── */
 
 .footer {
-
     text-align: center;
     color: #2e2a33;
     font-size: 12px;
@@ -803,13 +701,10 @@ button:hover {
 }
 
 </style>
-
 </head>
-
 <body>
 
 <!-- ════ TOP BAR ════ -->
-
 <div class="topbar">
 
     <div class="menu-wrap">
@@ -852,9 +747,7 @@ button:hover {
 </div>
 
 <!-- ════ CONTAINER ════ -->
-
 <div class="container">
-
 <div class="card">
 
     <!-- ── PROTECTOR PAGE ── -->
@@ -982,15 +875,12 @@ button:hover {
     </div>
 
 </div>
-
 <div class="footer">
     KXLuaprotect
 </div>
-
 </div>
 
 <!-- ════ SCRIPT ════ -->
-
 <script>
 
 /* ── state ── */
@@ -1036,6 +926,31 @@ document.addEventListener("click", () => {
 
 function closeMenu() {
     dropdown.classList.remove("open");
+}
+
+/* ── file upload (FIX) ── */
+
+function handleFileUpload(input) {
+
+    const file = input.files[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        document.getElementById("source").value = e.target.result;
+        document.getElementById("status").textContent = "File loaded: " + file.name;
+    };
+
+    reader.onerror = function() {
+        document.getElementById("status").textContent = "Gagal membaca file.";
+    };
+
+    reader.readAsText(file, "UTF-8");
+
+    /* Reset supaya bisa upload file yang sama lagi */
+    input.value = "";
 }
 
 /* ── protect ── */
@@ -1131,9 +1046,6 @@ function renderScripts() {
     const list =
         document.getElementById("scriptList");
 
-    const empty =
-        document.getElementById("scriptEmpty");
-
     fetch("/api/scripts")
         .then(r => r.json())
         .then(data => {
@@ -1143,7 +1055,7 @@ function renderScripts() {
             if (scripts.length === 0) {
 
                 list.innerHTML =
-                    '<div class="script-empty" id="scriptEmpty">No scripts yet. Go to Protector to add one.</div>';
+                    '<div class="script-empty">No scripts yet. Go to Protector to add one.</div>';
 
                 return;
             }
@@ -1236,37 +1148,22 @@ function escHtml(v) {
 }
 
 </script>
-
 </body>
-
 </html>
 `;
 
-/* =================================================
-   BROWSER SECURITY PAGE
-================================================= */
-
 function browserPage(id, baseUrl) {
 
-    const loader =
-        `loadstring(game:HttpGet("${baseUrl}/files/loaders/${id}.lua"))()`;
+  const loader =
+    `loadstring(game:HttpGet("${baseUrl}/files/loaders/${id}.lua"))()`;
 
-    return `
+  return `
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta
-    name="viewport"
-    content="width=device-width,initial-scale=1"
->
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KXLuaprotect</title>
-
 <style>
 
 * {
@@ -1276,9 +1173,7 @@ function browserPage(id, baseUrl) {
 }
 
 body {
-
     min-height: 100vh;
-
     background:
         radial-gradient(
             circle at top,
@@ -1286,13 +1181,10 @@ body {
             #0b0910 45%,
             #050507 100%
         );
-
     color: white;
-
     font-family:
         Arial,
         sans-serif;
-
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1300,19 +1192,12 @@ body {
 }
 
 .card {
-
     width: min(680px, 100%);
-
     padding: 40px 28px;
-
     border-radius: 18px;
-
     background: rgba(14,13,19,.96);
-
     border: 1px solid #2b2535;
-
     text-align: center;
-
     box-shadow:
         0 25px 80px rgba(0,0,0,.5);
 }
@@ -1323,7 +1208,6 @@ body {
 }
 
 h1 {
-
     color: #c9a8ff;
     font-size: 24px;
     font-weight: 900;
@@ -1332,7 +1216,6 @@ h1 {
 }
 
 p {
-
     color: #7a7085;
     line-height: 1.6;
     margin: 12px auto 22px;
@@ -1343,20 +1226,14 @@ p {
 /* ── loader box ── */
 
 .loader {
-
     text-align: left;
-
     background: #08080c;
-
     border: 1px solid #302a39;
-
     border-radius: 12px;
-
     padding: 14px 15px;
 }
 
 .loader-title {
-
     color: #6b6076;
     font-size: 11px;
     font-weight: 700;
@@ -1366,11 +1243,8 @@ p {
 }
 
 .loader-scroll {
-
     overflow-x: auto;
     cursor: grab;
-
-    /* scrollbar styling */
     scrollbar-width: thin;
     scrollbar-color: #3a2f47 #08080c;
 }
@@ -1398,26 +1272,19 @@ p {
 }
 
 .loader-code {
-
     color: #b897ff;
-
     font-family:
         Consolas,
         monospace;
-
     font-size: 13px;
-
     white-space: nowrap;
-
     display: inline-block;
-
     min-width: 100%;
 }
 
 /* ── copy button ── */
 
 button {
-
     width: 100%;
     margin-top: 14px;
     border: 0;
@@ -1438,7 +1305,6 @@ button:hover {
 /* ── note ── */
 
 .note {
-
     margin-top: 16px;
     color: #4e4558;
     font-size: 12px;
@@ -1448,7 +1314,6 @@ button:hover {
 /* ── brand ── */
 
 .brand {
-
     margin-top: 18px;
     color: #2e2a33;
     font-size: 11px;
@@ -1461,45 +1326,43 @@ button:hover {
 }
 
 </style>
-
 </head>
-
 <body>
 
 <div class="card">
 
-<div class="icon">🔒</div>
+    <div class="icon">🔒</div>
 
-<h1>This script can't be viewed in a browser</h1>
+    <h1>This script can't be viewed in a browser</h1>
 
-<p>
-For security, the source is only delivered
-to Roblox at runtime. Use the loader below
-in your executor or script.
-</p>
+    <p>
+        For security, the source is only delivered
+        to Roblox at runtime. Use the loader below
+        in your executor or script.
+    </p>
 
-<div class="loader">
+    <div class="loader">
 
-<div class="loader-title">LOADER</div>
+        <div class="loader-title">LOADER</div>
 
-<div class="loader-scroll" id="loaderScroll">
-<div class="loader-code" id="loaderCode">${escapeHtml(loader)}</div>
-</div>
+        <div class="loader-scroll" id="loaderScroll">
+            <div class="loader-code" id="loaderCode">${escapeHtml(loader)}</div>
+        </div>
 
-</div>
+    </div>
 
-<button id="copyBtn" onclick="copyLoader()">
-📋 Copy Loader
-</button>
+    <button id="copyBtn" onclick="copyLoader()">
+        📋 Copy Loader
+    </button>
 
-<div class="note">
-Paste this into your executor — it will
-fetch and run the script in-game.
-</div>
+    <div class="note">
+        Paste this into your executor — it will
+        fetch and run the script in-game.
+    </div>
 
-<div class="brand">
-KX<span>Luaprotect</span>
-</div>
+    <div class="brand">
+        KX<span>Luaprotect</span>
+    </div>
 
 </div>
 
@@ -1566,9 +1429,7 @@ function copyLoader() {
 }
 
 </script>
-
 </body>
-
 </html>
 `;
 }
@@ -1578,313 +1439,269 @@ function copyLoader() {
 ================================================= */
 
 app.get("/", (req, res) => {
-
-    res
-        .status(200)
-        .type("html")
-        .send(HOME_PAGE);
+  res
+    .status(200)
+    .type("html")
+    .send(HOME_PAGE);
 });
 
 /* =================================================
    PROTECT API
 ================================================= */
 
-app.post(
-    "/api/protect",
-    (req, res) => {
+app.post("/api/protect", (req, res) => {
 
-        const source =
-            req.body?.source;
+  const source = req.body?.source;
 
-        const name =
-            typeof req.body?.name === "string" &&
-            req.body.name.trim()
-                ? req.body.name.trim()
-                : "Untitled Script";
+  const name =
+    typeof req.body?.name === "string" &&
+    req.body.name.trim()
+      ? req.body.name.trim()
+      : "Untitled Script";
 
-        if (
-            typeof source !==
-            "string"
-        ) {
+  if (typeof source !== "string") {
+    return res
+      .status(400)
+      .json({ error: "Invalid source." });
+  }
 
-            return res
-                .status(400)
-                .json({
-                    error:
-                        "Invalid source."
-                });
-        }
+  if (!source.trim()) {
+    return res
+      .status(400)
+      .json({ error: "Source is empty." });
+  }
 
-        if (!source.trim()) {
+  try {
 
-            return res
-                .status(400)
-                .json({
-                    error:
-                        "Source is empty."
-                });
-        }
+    const protectedSource = protectLuau(source);
 
-        try {
+    const id = generateId();
 
-            const protectedSource =
-                protectLuau(source);
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
 
-            const id =
-                generateId();
+    const url = `${baseUrl}/files/loaders/${id}.lua`;
 
-            const baseUrl =
-                `${req.protocol}://${req.get("host")}`;
+    loaders.set(id, {
+      name:      name,
+      source:    protectedSource,
+      createdAt: Date.now(),
+      enabled:   true,
+      url:       url
+    });
+    saveToDisk(loaders);
 
-            const url =
-                `${baseUrl}/files/loaders/${id}.lua`;
+    const loadstring =
+      `loadstring(game:HttpGet("${url}"))()`;
 
-            loaders.set(
-                id,
-                {
-                    name:        name,
-                    source:      protectedSource,
-                    createdAt:   Date.now(),
-                    enabled:     true,
-                    url:         url
-                }
-            );
-            saveToDisk(loaders);
+    res.json({
+      success:    true,
+      id:         id,
+      url:        url,
+      loadstring: loadstring
+    });
 
-            const loadstring =
-                `loadstring(game:HttpGet("${url}"))()`;
+  } catch (error) {
 
-            res.json({
-                success:    true,
-                id:         id,
-                url:        url,
-                loadstring: loadstring
-            });
+    console.error(error);
 
-        } catch (error) {
-
-            console.error(error);
-
-            res
-                .status(500)
-                .json({
-                    error:
-                        "Protection failed."
-                });
-        }
-    }
-);
+    res
+      .status(500)
+      .json({ error: "Protection failed." });
+  }
+});
 
 /* =================================================
    LIST SCRIPTS API
 ================================================= */
 
-app.get(
-    "/api/scripts",
-    (req, res) => {
+app.get("/api/scripts", (req, res) => {
 
-        const scripts = [];
+  const scripts = [];
 
-        for (const [id, item] of loaders.entries()) {
-            scripts.push({
-                id:        id,
-                name:      item.name,
-                url:       item.url,
-                enabled:   item.enabled,
-                createdAt: item.createdAt
-            });
-        }
+  for (const [id, item] of loaders.entries()) {
+    scripts.push({
+      id:        id,
+      name:      item.name,
+      url:       item.url,
+      enabled:   item.enabled,
+      createdAt: item.createdAt
+    });
+  }
 
-        /*
-           Newest first
-        */
-        scripts.sort(
-            (a, b) => b.createdAt - a.createdAt
-        );
+  scripts.sort(
+    (a, b) => b.createdAt - a.createdAt
+  );
 
-        res.json({ success: true, scripts });
-    }
-);
+  res.json({ success: true, scripts });
+});
 
 /* =================================================
    TOGGLE SCRIPT API
 ================================================= */
 
-app.post(
-    "/api/scripts/:id/toggle",
-    (req, res) => {
+app.post("/api/scripts/:id/toggle", (req, res) => {
 
-        const id   = req.params.id;
-        const item = loaders.get(id);
+  const id   = req.params.id;
+  const item = loaders.get(id);
 
-        if (!item) {
-            return res
-                .status(404)
-                .json({ error: "Script not found." });
-        }
+  if (!item) {
+    return res
+      .status(404)
+      .json({ error: "Script not found." });
+  }
 
-        const enabled =
-            typeof req.body?.enabled === "boolean"
-                ? req.body.enabled
-                : !item.enabled;
+  const enabled =
+    typeof req.body?.enabled === "boolean"
+      ? req.body.enabled
+      : !item.enabled;
 
-        item.enabled = enabled;
+  item.enabled = enabled;
 
-        loaders.set(id, item);
-        saveToDisk(loaders);
+  loaders.set(id, item);
+  saveToDisk(loaders);
 
-        res.json({ success: true, id, enabled });
-    }
-);
+  res.json({ success: true, id, enabled });
+});
 
 /* =================================================
    DELETE SCRIPT API
 ================================================= */
 
-app.delete(
-    "/api/scripts/:id",
-    (req, res) => {
+app.delete("/api/scripts/:id", (req, res) => {
 
-        const id = req.params.id;
+  const id = req.params.id;
 
-        if (!loaders.has(id)) {
-            return res
-                .status(404)
-                .json({ error: "Script not found." });
-        }
+  if (!loaders.has(id)) {
+    return res
+      .status(404)
+      .json({ error: "Script not found." });
+  }
 
-        loaders.delete(id);
-        saveToDisk(loaders);
+  loaders.delete(id);
+  saveToDisk(loaders);
 
-        res.json({ success: true, id });
-    }
-);
+  res.json({ success: true, id });
+});
 
 /* =================================================
    LOADER
 ================================================= */
 
-app.get(
-    "/files/loaders/:id.lua",
-    (req, res) => {
+app.get("/files/loaders/:id.lua", (req, res) => {
 
-        const id   = req.params.id;
-        const item = loaders.get(id);
+  const id   = req.params.id;
+  const item = loaders.get(id);
 
-        if (!item) {
+  if (!item) {
+    return res
+      .status(404)
+      .type("text")
+      .send("Loader not found.");
+  }
 
-            return res
-                .status(404)
-                .type("text")
-                .send("Loader not found.");
-        }
+  const userAgent =
+    String(
+      req.headers["user-agent"] || ""
+    ).toLowerCase();
 
-        const userAgent =
-            String(
-                req.headers["user-agent"] || ""
-            ).toLowerCase();
+  const accept =
+    String(
+      req.headers["accept"] || ""
+    ).toLowerCase();
 
-        const accept =
-            String(
-                req.headers["accept"] || ""
-            ).toLowerCase();
+  /*
+   * Detect normal browsers.
+   */
 
-        /*
-         * Detect normal browsers.
-         */
+  const isBrowser =
+    (
+      userAgent.includes("mozilla") ||
+      userAgent.includes("chrome")  ||
+      userAgent.includes("safari")  ||
+      userAgent.includes("firefox") ||
+      userAgent.includes("edg/")    ||
+      userAgent.includes("opera")
+    ) &&
+    (
+      accept.includes("text/html") ||
+      accept.includes("application/xhtml+xml")
+    );
 
-        const isBrowser =
-            (
-                userAgent.includes("mozilla") ||
-                userAgent.includes("chrome")  ||
-                userAgent.includes("safari")  ||
-                userAgent.includes("firefox") ||
-                userAgent.includes("edg/")    ||
-                userAgent.includes("opera")
-            ) &&
-            (
-                accept.includes("text/html") ||
-                accept.includes("application/xhtml+xml")
-            );
+  /*
+   * Browser: NEVER send source.
+   */
 
-        /*
-         * Browser: NEVER send source.
-         */
+  if (isBrowser) {
 
-        if (isBrowser) {
+    const baseUrl =
+      `${req.protocol}://${req.get("host")}`;
 
-            const baseUrl =
-                `${req.protocol}://${req.get("host")}`;
+    return res
+      .status(403)
+      .type("html")
+      .send(browserPage(id, baseUrl));
+  }
 
-            return res
-                .status(403)
-                .type("html")
-                .send(browserPage(id, baseUrl));
-        }
+  /*
+   * Disabled check.
+   */
 
-        /*
-         * Disabled check.
-         * If script is disabled, executor gets an error.
-         */
+  if (!item.enabled) {
 
-        if (!item.enabled) {
+    return res
+      .status(403)
+      .type("text")
+      .send(
+        "-- KXLuaprotect: This script is currently disabled.\n" +
+        "error('Script disabled by owner.')"
+      );
+  }
 
-            return res
-                .status(403)
-                .type("text")
-                .send(
-                    "-- KXLuaprotect: This script is currently disabled.\n" +
-                    "error('Script disabled by owner.')"
-                );
-        }
+  /*
+   * Runtime/non-browser: Send protected source.
+   */
 
-        /*
-         * Runtime/non-browser: Send protected source.
-         */
-
-        res
-            .status(200)
-            .type("text/plain")
-            .set("Cache-Control", "no-store, no-cache, must-revalidate")
-            .set("Pragma", "no-cache")
-            .send(item.source);
-    }
-);
+  res
+    .status(200)
+    .type("text/plain")
+    .set("Cache-Control", "no-store, no-cache, must-revalidate")
+    .set("Pragma", "no-cache")
+    .send(item.source);
+});
 
 /* =================================================
    404
 ================================================= */
 
-app.use(
-    (req, res) => {
+app.use((req, res) => {
 
-        res
-            .status(404)
-            .type("html")
-            .send(`
+  res
+    .status(404)
+    .type("html")
+    .send(`
 <!DOCTYPE html>
 <html>
 <head>
 <title>KXLuaprotect - 404</title>
 <style>
 body {
-    margin:0;
-    min-height:100vh;
-    background:#07070a;
-    color:white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-family:Arial;
+    margin: 0;
+    min-height: 100vh;
+    background: #07070a;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial;
 }
 div {
-    text-align:center;
+    text-align: center;
 }
 h1 {
-    color:#9565ff;
+    color: #9565ff;
 }
 p {
-    color:#77727f;
+    color: #77727f;
 }
 </style>
 </head>
@@ -1895,19 +1712,13 @@ p {
 </div>
 </body>
 </html>
-        `);
-    }
-);
+    `);
+});
 
 /* =================================================
    START
 ================================================= */
 
-app.listen(
-    PORT,
-    () => {
-        console.log(
-            `KXLuaprotect running on port ${PORT}`
-        );
-    }
-);
+app.listen(PORT, () => {
+  console.log(`KXLuaprotect running on port ${PORT}`);
+});
