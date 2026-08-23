@@ -20,9 +20,7 @@ const CLIENT_ID       = process.env.DISCORD_CLIENT_ID || "1540862780545179698";
 const MEMBER_ROLE     = process.env.MEMBER_ROLE_ID    || "";
 const BASE_URL        = process.env.BASE_URL           || "https://kxluaprotect-production-a8eb.up.railway.app";
 const BOT_SECRET      = process.env.BOT_SECRET        || "";
-// Admin bot: cek user ID, bebas dari guild/role manapun
-// Tambah admin: set env ADMIN_USER_IDS=id1,id2,id3
-const ADMIN_USER_IDS  = (process.env.ADMIN_USER_IDS || "1485940617342353594").split(",").map(s => s.trim()).filter(Boolean);
+// Admin bot = siapapun yg punya Administrator permission di guild masing-masing
 
 /* =================================================
    DATA
@@ -248,8 +246,8 @@ async function registerCommands() {
 ================================================= */
 
 function isAdmin(member) {
-    // Admin jika user ID ada di whitelist ATAU punya permission Administrator di server itu
-    return ADMIN_USER_IDS.includes(member.user.id) || member.permissions.has(PermissionFlagsBits.Administrator);
+    // Admin = siapapun yang punya permission Administrator di guild tersebut (owner/admin server itu)
+    return member.permissions.has(PermissionFlagsBits.Administrator);
 }
 
 function timeLeft(expireAt) {
