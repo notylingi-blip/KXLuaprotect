@@ -21,24 +21,22 @@ const MEMBER_ROLE = process.env.MEMBER_ROLE_ID    || "";
 const BASE_URL    = process.env.BASE_URL           || "https://kxluaprotect-production-a8eb.up.railway.app";
 
 /* =================================================
-   DATA  —  helpers defined first, then accessors
+   DATA
 ================================================= */
 
-const DATA_DIR     = fs.existsSync("/data") ? "/data" : path.join(__dirname, "data");
-const USERS_FILE   = path.join(DATA_DIR, "users.json");
-const KEYS_FILE    = path.join(DATA_DIR, "keys.json");
-const HWID_FILE    = path.join(DATA_DIR, "hwid.json");
-const SCRIPTS_FILE = path.join(DATA_DIR, "scripts.json");
-const CONFIG_FILE  = path.join(DATA_DIR, "config.json");
+const DATA_DIR      = fs.existsSync("/data") ? "/data" : path.join(__dirname, "data");
+const USERS_FILE    = path.join(DATA_DIR, "users.json");
+const KEYS_FILE     = path.join(DATA_DIR, "keys.json");
+const HWID_FILE     = path.join(DATA_DIR, "hwid.json");
+const SCRIPTS_FILE  = path.join(DATA_DIR, "scripts.json");
+const CONFIG_FILE   = path.join(DATA_DIR, "config.json");
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function loadJson(file, fallback = {}) {
     try {
         if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch (e) {
-        console.error("loadJson error:", file, e.message);
-    }
+    } catch (e) { console.error("loadJson error:", file, e.message); }
     return fallback;
 }
 function saveJson(file, data) {
@@ -53,9 +51,48 @@ function getScripts() { return loadJson(SCRIPTS_FILE); }
 function getConfig()  { return loadJson(CONFIG_FILE); }
 function saveConfig(d) { saveJson(CONFIG_FILE, d); }
 
-/** Buyer role set via /setrollbuyer, falls back to MEMBER_ROLE env var */
 function getBuyerRoleId() {
     return getConfig().buyerRoleId || MEMBER_ROLE || null;
+}
+
+/* =================================================
+   ACCESS ROLE HELPERS
+   Config structure:
+   {
+     accessRoles: {
+       panel:        ["roleId", ...],   // bisa lihat & klik panel
+       protect:      ["roleId", ...],   // bisa protect script via web
+       createScript: ["roleId", ...],   // bisa addscript
+       all:          ["roleId", ...],   // shortcut: semua fitur
+     }
+   }
+================================================= */
+
+const ACCESS_FEATURES = ["panel", "protect", "createScript", "all"];
+
+function getAccessRoles() {
+    return getConfig().accessRoles || {};
+}
+
+function saveAccessRoles(accessRoles) {
+    const config = getConfig();
+    config.accessRoles = accessRoles;
+    saveConfig(config);
+}
+
+/**
+ * Cek apakah member boleh akses fitur tertentu.
+ * Admin selalu boleh.
+ * Kalau fitur "all" punya role member → boleh semua.
+ */
+function hasAccess(member, feature) {
+    if (isAdmin(member)) return true;
+    const ar = getAccessRoles();
+    const allRoles = ar["all"] || [];
+    const featRoles = ar[feature] || [];
+    const allowed = [...new Set([...allRoles, ...featRoles])];
+    if (allowed.length === 0) return true; // belum di-set = semua boleh
+    return allowed.some(roleId => member.roles.cache.has(roleId));
 }
 
 function generateKey() {
@@ -141,6 +178,52 @@ const commands = [
         .setDescription("[ADMIN] View the currently configured buyer role")
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
 
+    // ── NEW: /accessrole ──
+    new SlashCommandBuilder()
+        .setName("accessrole")
+        .setDescription("[ADMIN] Manage which roles can access panel, protect, or create scripts")
+        .addSubcommand(sub =>
+            sub.setName("set")
+                .setDescription("Add a role that can access a feature")
+                .addStringOption(o =>
+                    o.setName("feature")
+                        .setDescription("Feature to grant access to")
+                        .setRequired(true)
+                        .addChoices(
+                            { name: "panel — lihat & klik panel bot",         value: "panel"        },
+                            { name: "protect — protect script via web",        value: "protect"      },
+                            { name: "createscript — tambah script (/addscript)", value: "createScript" },
+                            { name: "all — semua fitur di atas",               value: "all"          },
+                        )
+                )
+                .addRoleOption(o => o.setName("role").setDescription("Role yang diberi akses").setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName("remove")
+                .setDescription("Hapus role dari akses suatu fitur")
+                .addStringOption(o =>
+                    o.setName("feature")
+                        .setDescription("Feature yang mau di-revoke")
+                        .setRequired(true)
+                        .addChoices(
+                            { name: "panel",        value: "panel"        },
+                            { name: "protect",      value: "protect"      },
+                            { name: "createscript", value: "createScript" },
+                            { name: "all",          value: "all"          },
+                        )
+                )
+                .addRoleOption(o => o.setName("role").setDescription("Role yang mau dihapus aksesnya").setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName("view")
+                .setDescription("Lihat semua role yang punya akses ke tiap fitur")
+        )
+        .addSubcommand(sub =>
+            sub.setName("reset")
+                .setDescription("Reset semua access role (semua orang bisa akses lagi)")
+        )
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+
 ].map(c => c.toJSON());
 
 async function registerCommands() {
@@ -173,17 +256,12 @@ function formatDate(ts) {
     return new Date(ts).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-/** Returns the key/WL string if user has active access, else null */
 function getActiveAccess(userId) {
     const keys = getKeys();
-
-    // Whitelist check
     const wlEntry = keys[`WL_${userId}`];
     if (wlEntry && wlEntry.usedBy === userId && (!wlEntry.expireAt || wlEntry.expireAt > Date.now())) {
         return `WL_${userId}`;
     }
-
-    // Normal key check
     const found = Object.entries(keys).find(([k, v]) =>
         !k.startsWith("WL_") &&
         v.usedBy === userId &&
@@ -232,6 +310,10 @@ function buildPanel(guildName) {
 ================================================= */
 
 async function handleRedeemButton(interaction) {
+    // Cek access role untuk "panel"
+    if (!hasAccess(interaction.member, "panel")) {
+        return interaction.reply({ content: "❌ Kamu tidak punya akses untuk menggunakan panel ini.", ephemeral: true });
+    }
     const modal = new ModalBuilder()
         .setCustomId("modal_redeem")
         .setTitle("Redeem Key");
@@ -246,6 +328,9 @@ async function handleRedeemButton(interaction) {
 }
 
 async function handleViewScriptButton(interaction) {
+    if (!hasAccess(interaction.member, "panel")) {
+        return interaction.reply({ content: "❌ Kamu tidak punya akses untuk menggunakan panel ini.", ephemeral: true });
+    }
     await interaction.deferReply({ ephemeral: true });
 
     const userId    = interaction.user.id;
@@ -293,6 +378,9 @@ async function handleViewScriptButton(interaction) {
 }
 
 async function handleGetRoleButton(interaction) {
+    if (!hasAccess(interaction.member, "panel")) {
+        return interaction.reply({ content: "❌ Kamu tidak punya akses untuk menggunakan panel ini.", ephemeral: true });
+    }
     await interaction.deferReply({ ephemeral: true });
 
     const buyerRoleId = getBuyerRoleId();
@@ -324,6 +412,9 @@ async function handleGetRoleButton(interaction) {
 }
 
 async function handleResetHwidButton(interaction) {
+    if (!hasAccess(interaction.member, "panel")) {
+        return interaction.reply({ content: "❌ Kamu tidak punya akses untuk menggunakan panel ini.", ephemeral: true });
+    }
     await interaction.deferReply({ ephemeral: true });
 
     const userId    = interaction.user.id;
@@ -349,6 +440,9 @@ async function handleResetHwidButton(interaction) {
 }
 
 async function handleStatsButton(interaction) {
+    if (!hasAccess(interaction.member, "panel")) {
+        return interaction.reply({ content: "❌ Kamu tidak punya akses untuk menggunakan panel ini.", ephemeral: true });
+    }
     await interaction.deferReply({ ephemeral: true });
 
     const userId    = interaction.user.id;
@@ -393,7 +487,6 @@ async function handleRedeemModal(interaction) {
     const keys    = getKeys();
     const users   = getUsers();
 
-    // Already has access?
     const existing = getActiveAccess(userId);
     if (existing) {
         const expireAt = keys[existing]?.expireAt;
@@ -415,7 +508,6 @@ async function handleRedeemModal(interaction) {
     if (keyData.expireAt && keyData.expireAt < Date.now())
         return interaction.editReply({ content: "❌ This key has expired." });
 
-    // Bind key to this user permanently
     keyData.usedBy   = userId;
     keyData.usedAt   = Date.now();
     keyData.username = interaction.user.username;
@@ -427,7 +519,6 @@ async function handleRedeemModal(interaction) {
     users[userId].keyExpireAt = keyData.expireAt || null;
     saveJson(USERS_FILE, users);
 
-    // Auto-assign buyer role
     const buyerRoleId = getBuyerRoleId();
     if (buyerRoleId) {
         try { await interaction.member.roles.add(buyerRoleId); } catch (e) {}
@@ -646,13 +737,14 @@ async function handleRemoveWhitelist(interaction) {
 
 async function handleAddScript(interaction) {
     await interaction.deferReply({ ephemeral: true });
-    if (!isAdmin(interaction.member)) return interaction.editReply({ content: "❌ Admin only." });
+    if (!isAdmin(interaction.member) && !hasAccess(interaction.member, "createScript")) {
+        return interaction.editReply({ content: "❌ Kamu tidak punya akses untuk menambah script." });
+    }
 
     const name    = interaction.options.getString("name").trim();
     const url     = interaction.options.getString("url").trim();
     const key     = interaction.options.getString("key")?.trim() || null;
 
-    // Basic URL validation
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
         return interaction.editReply({ content: "❌ URL harus dimulai dengan `http://` atau `https://`" });
     }
@@ -776,6 +868,87 @@ async function handleViewRollBuyer(interaction) {
 }
 
 /* =================================================
+   /accessrole HANDLER
+================================================= */
+
+const FEATURE_LABELS = {
+    panel:        "Panel (Redeem, Get Script, dll)",
+    protect:      "Protect Script (web)",
+    createScript: "Create Script (/addscript)",
+    all:          "Semua Fitur",
+};
+
+async function handleAccessRole(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    if (!isAdmin(interaction.member)) return interaction.editReply({ content: "❌ Admin only." });
+
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === "set") {
+        const feature = interaction.options.getString("feature");
+        const role    = interaction.options.getRole("role");
+        const ar      = getAccessRoles();
+        if (!ar[feature]) ar[feature] = [];
+        if (!ar[feature].includes(role.id)) ar[feature].push(role.id);
+        saveAccessRoles(ar);
+
+        return interaction.editReply({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle("✅ Access Role Set")
+                    .setColor(0x57f287)
+                    .addFields(
+                        { name: "🎯 Fitur",   value: FEATURE_LABELS[feature] || feature, inline: false },
+                        { name: "👤 Role",    value: `${role} (\`${role.id}\`)`,         inline: false },
+                        { name: "📌 Status",  value: "Role ini sekarang bisa akses fitur tersebut.", inline: false },
+                    )
+                    .setFooter({ text: "KXLuaprotect • /accessrole view untuk lihat semua" })
+                    .setTimestamp()
+            ]
+        });
+    }
+
+    if (sub === "remove") {
+        const feature = interaction.options.getString("feature");
+        const role    = interaction.options.getRole("role");
+        const ar      = getAccessRoles();
+        if (!ar[feature] || !ar[feature].includes(role.id)) {
+            return interaction.editReply({ content: `❌ Role ${role} tidak ada di akses fitur **${FEATURE_LABELS[feature] || feature}**.` });
+        }
+        ar[feature] = ar[feature].filter(id => id !== role.id);
+        if (ar[feature].length === 0) delete ar[feature];
+        saveAccessRoles(ar);
+        return interaction.editReply({ content: `✅ Role ${role} dihapus dari akses fitur **${FEATURE_LABELS[feature] || feature}**.` });
+    }
+
+    if (sub === "view") {
+        const ar = getAccessRoles();
+
+        const lines = ACCESS_FEATURES.map(feat => {
+            const roles = ar[feat] || [];
+            const roleStr = roles.length > 0
+                ? roles.map(id => `<@&${id}>`).join(", ")
+                : "`Semua orang (belum di-set)`";
+            return `**${FEATURE_LABELS[feat]}**\n└ ${roleStr}`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle("🔐 Access Role Configuration")
+            .setColor(0x9565ff)
+            .setDescription(lines.join("\n\n"))
+            .setFooter({ text: "KXLuaprotect • /accessrole set untuk tambah role" })
+            .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (sub === "reset") {
+        saveAccessRoles({});
+        return interaction.editReply({ content: "✅ Semua access role di-reset. Sekarang semua orang bisa akses semua fitur." });
+    }
+}
+
+/* =================================================
    BOT CLIENT
 ================================================= */
 
@@ -805,6 +978,7 @@ client.on("interactionCreate", async interaction => {
                 case "addscript":       return await handleAddScript(interaction);
                 case "setrollbuyer":    return await handleSetRollBuyer(interaction);
                 case "viewrollbuyer":   return await handleViewRollBuyer(interaction);
+                case "accessrole":      return await handleAccessRole(interaction);
             }
         }
 
