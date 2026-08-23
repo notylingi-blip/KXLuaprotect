@@ -15,13 +15,14 @@ const fetch  = require("node-fetch");
    CONFIG
 ================================================= */
 
-const TOKEN       = process.env.BOT_TOKEN;
-const CLIENT_ID   = process.env.DISCORD_CLIENT_ID || "1540862780545179698";
-const GUILD_ID    = process.env.GUILD_ID          || "1530091511851520180";
-const ADMIN_ROLE  = process.env.ADMIN_ROLE_ID     || "1530094098856546445";
-const MEMBER_ROLE = process.env.MEMBER_ROLE_ID    || "";
-const BASE_URL    = process.env.BASE_URL           || "https://kxluaprotect-production-a8eb.up.railway.app";
-const BOT_SECRET  = process.env.BOT_SECRET        || "";   // shared secret antara bot & server
+const TOKEN           = process.env.BOT_TOKEN;
+const CLIENT_ID       = process.env.DISCORD_CLIENT_ID || "1540862780545179698";
+const MEMBER_ROLE     = process.env.MEMBER_ROLE_ID    || "";
+const BASE_URL        = process.env.BASE_URL           || "https://kxluaprotect-production-a8eb.up.railway.app";
+const BOT_SECRET      = process.env.BOT_SECRET        || "";
+// Admin bot: cek user ID, bebas dari guild/role manapun
+// Tambah admin: set env ADMIN_USER_IDS=id1,id2,id3
+const ADMIN_USER_IDS  = (process.env.ADMIN_USER_IDS || "1485940617342353594").split(",").map(s => s.trim()).filter(Boolean);
 
 /* =================================================
    DATA
@@ -236,8 +237,9 @@ const commands = [
 async function registerCommands() {
     const rest = new REST({ version: "10" }).setToken(TOKEN);
     try {
-        await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
-        console.log("✅ Slash commands registered.");
+        // Global commands — muncul di semua server tempat bot di-invite
+        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+        console.log("✅ Slash commands registered globally.");
     } catch (e) { console.error("❌ Register error:", e.message); }
 }
 
@@ -246,7 +248,8 @@ async function registerCommands() {
 ================================================= */
 
 function isAdmin(member) {
-    return member.roles.cache.has(ADMIN_ROLE) || member.permissions.has(PermissionFlagsBits.Administrator);
+    // Admin jika user ID ada di whitelist ATAU punya permission Administrator di server itu
+    return ADMIN_USER_IDS.includes(member.user.id) || member.permissions.has(PermissionFlagsBits.Administrator);
 }
 
 function timeLeft(expireAt) {
