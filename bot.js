@@ -196,12 +196,15 @@ async function handleViewScriptButton(interaction) {
 
     const userId  = interaction.user.id;
     const scripts = getScripts();
-    const users   = getUsers();
-    const user    = users[userId];
+    const keys    = getKeys();
 
-    // Cek punya key aktif
-    if (!user?.activeKey) {
-        return interaction.editReply({ content: "❌ Kamu belum redeem key. Klik **Redeem Key** dulu." });
+    // Cek punya key aktif langsung dari keys.json
+    const activeKey = Object.entries(keys).find(([k, v]) =>
+        v.usedBy === userId && (!v.expireAt || v.expireAt > Date.now())
+    );
+
+    if (!activeKey) {
+        return interaction.editReply({ content: "❌ Kamu belum punya key aktif. Klik **Redeem Key** dulu." });
     }
 
     const list = [];
@@ -242,16 +245,14 @@ async function handleGetRoleButton(interaction) {
         return interaction.editReply({ content: "❌ MEMBER_ROLE belum diset oleh admin." });
 
     const userId = interaction.user.id;
-    const users  = getUsers();
     const keys   = getKeys();
-    const user   = users[userId];
 
-    if (!user?.activeKey)
-        return interaction.editReply({ content: "❌ Kamu belum redeem key. Klik **Redeem Key** dulu." });
+    const activeKey = Object.entries(keys).find(([k, v]) =>
+        v.usedBy === userId && (!v.expireAt || v.expireAt > Date.now())
+    );
 
-    const keyData = keys[user.activeKey];
-    if (!keyData || (keyData.expireAt && keyData.expireAt < Date.now()))
-        return interaction.editReply({ content: "❌ Key kamu expired. Hubungi admin." });
+    if (!activeKey)
+        return interaction.editReply({ content: "❌ Kamu belum punya key aktif. Klik **Redeem Key** dulu." });
 
     if (interaction.member.roles.cache.has(MEMBER_ROLE))
         return interaction.editReply({ content: "✅ Kamu sudah punya role!" });
@@ -325,6 +326,16 @@ async function handleRedeemModal(interaction) {
     const keys    = getKeys();
     const users   = getUsers();
 
+    // Cek user sudah punya key aktif
+    const existingKey = Object.entries(keys).find(([k, v]) =>
+        v.usedBy === userId && (!v.expireAt || v.expireAt > Date.now())
+    );
+    if (existingKey) {
+        return interaction.editReply({
+            content: `✅ Kamu sudah punya key aktif: \`${existingKey[0]}\`\nExpire: **${timeLeft(existingKey[1].expireAt)}**\n\nGa perlu redeem ulang!`
+        });
+    }
+
     if (!keys[key])
         return interaction.editReply({ content: "❌ Key tidak valid." });
 
@@ -335,9 +346,6 @@ async function handleRedeemModal(interaction) {
 
     if (keyData.expireAt && keyData.expireAt < Date.now())
         return interaction.editReply({ content: "❌ Key sudah expired." });
-
-    if (keyData.usedBy === userId)
-        return interaction.editReply({ content: `✅ Key ini sudah aktif di akunmu.\nExpire: **${timeLeft(keyData.expireAt)}**` });
 
     keyData.usedBy   = userId;
     keyData.usedAt   = Date.now();
