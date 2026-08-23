@@ -40,15 +40,12 @@ app.use(session({
 
 /* =================================================
    PERSISTENCE
-   - loaders   = draft scripts (belum aktif di panel)
-   - scripts   = scripts yang udah di-add ke panel via bot /addscript
-   - panels    = daftar panel yang dibuat
 ================================================= */
 
 const DATA_DIR     = fs.existsSync("/data") ? "/data" : nodePath.join(__dirname, "data");
-const DATA_FILE    = nodePath.join(DATA_DIR, "loaders.json");   // draft
-const SCRIPTS_FILE = nodePath.join(DATA_DIR, "scripts.json");   // aktif di panel
-const PANELS_FILE  = nodePath.join(DATA_DIR, "panels.json");    // daftar panel
+const DATA_FILE    = nodePath.join(DATA_DIR, "loaders.json");
+const SCRIPTS_FILE = nodePath.join(DATA_DIR, "scripts.json");
+const PANELS_FILE  = nodePath.join(DATA_DIR, "panels.json");
 const USERS_FILE   = nodePath.join(DATA_DIR, "users.json");
 const LOGS_FILE    = nodePath.join(DATA_DIR, "logs.json");
 const CONFIG_FILE  = nodePath.join(DATA_DIR, "config.json");
@@ -69,7 +66,6 @@ function saveJson(file, data) {
     catch (e) { console.error("Failed to save " + file + ":", e.message); }
 }
 
-/* loaders map (draft) */
 function loadFromDisk() {
     try {
         if (fs.existsSync(DATA_FILE)) {
@@ -90,7 +86,7 @@ function saveToDisk(map) {
     } catch (e) { console.error("Failed to save loaders:", e.message); }
 }
 
-const loaders = loadFromDisk();          // draft
+const loaders = loadFromDisk();
 let   users   = loadJson(USERS_FILE);
 let   logs    = loadJson(LOGS_FILE);
 if (!logs.entries) logs.entries = [];
@@ -118,7 +114,6 @@ function sessionHasAccess(user, feature) {
 ================================================= */
 
 function getPanels() { return loadJson(PANELS_FILE); }
-
 function savePanels(data) { saveJson(PANELS_FILE, data); }
 
 /* =================================================
@@ -369,7 +364,6 @@ app.get("/admin", requireLogin, (req, res) => {
     const bannedUsers  = Object.values(users).filter(u => u.banned).length;
     const recentLogs   = logs.entries.slice(0, 8);
 
-    // scripts aktif (dari bot)
     const scripts     = loadJson(SCRIPTS_FILE);
     const totalActive = Object.keys(scripts).length;
     const panels      = getPanels();
@@ -443,7 +437,6 @@ tr:hover td{background:#13101e}
 .log-detail{font-size:11px;color:#4a4258;margin-top:2px}
 .log-time{font-size:11px;color:#3a3048;flex-shrink:0}
 .empty{text-align:center;color:#3a3048;font-size:14px;padding:40px 0}
-/* PROTECTOR */
 .proto-form{display:flex;flex-direction:column;gap:14px}
 .form-label{color:#5a5268;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .form-input{width:100%;background:#08080f;color:#e0d8ed;border:1px solid #2a2040;border-radius:10px;padding:9px 14px;outline:none;font-size:13px;font-family:Arial,sans-serif;transition:border-color .15s}
@@ -466,7 +459,6 @@ textarea.form-textarea:focus{border-color:#7040c0}
 .btn-copy{background:#1a1430;border:0;border-radius:10px;padding:9px 14px;color:#c49dff;font-weight:700;font-size:13px;cursor:pointer;transition:filter .12s}
 .btn-copy:hover{filter:brightness(1.15)}
 .proto-status{text-align:center;color:#4a4258;font-size:12px;margin-top:10px}
-/* DRAFT info box */
 .draft-info{background:#1a1000;border:1px solid #4a3000;border-radius:10px;padding:12px 16px;color:#e0a030;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
 .draft-info strong{color:#f0c040}
 @media(max-width:768px){
@@ -549,7 +541,7 @@ textarea.form-textarea:focus{border-color:#7040c0}
     </div>
 </div>
 
-<!-- ACTIVE SCRIPTS (dari bot) -->
+<!-- ACTIVE SCRIPTS -->
 <div class="page" id="admin-page-scripts">
     <div class="page-header"><div class="page-title">Active Scripts</div><div class="page-sub">Script yang sudah di-publish ke panel via /addscript</div></div>
     <div class="section">
@@ -645,10 +637,10 @@ textarea.form-textarea:focus{border-color:#7040c0}
         </div>
 
         <div id="adminResult" style="display:none;margin-top:20px">
-            <div class="form-label" style="margin-bottom:8px">Draft URL (belum aktif sampai di-/addscript)</div>
+            <div class="form-label" style="margin-bottom:8px">Loader (siap pakai setelah di-/addscript)</div>
             <div class="result-box" id="adminLoadstring"></div>
             <div class="result-actions">
-                <button class="btn-copy" onclick="adminCopyLoadstring()">📋 Copy URL</button>
+                <button class="btn-copy" onclick="adminCopyLoadstring()">📋 Copy Loader</button>
             </div>
         </div>
         <div class="proto-status" id="adminStatus">Ready.</div>
@@ -826,7 +818,7 @@ function filterLogs() {
 }
 
 /* ── PROTECTOR ── */
-let adminCurrentUrl = "", keyMode = "yes";
+let adminCurrentLoader = "", keyMode = "yes";
 
 async function loadAdminScriptPicker() {
     const sel = document.getElementById("adminScriptPicker");
@@ -875,17 +867,17 @@ async function adminProtect() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Protection failed.");
-        adminCurrentUrl = data.url;
-        document.getElementById("adminLoadstring").textContent = data.url;
+        adminCurrentLoader = data.loader;
+        document.getElementById("adminLoadstring").textContent = data.loader;
         document.getElementById("adminResult").style.display = "block";
         status.textContent = "✅ Draft disimpan! Jalankan /addscript di Discord untuk publish ke panel.";
         loadAdminScriptPicker();
     } catch (err) { status.textContent = "❌ " + err.message; }
 }
 async function adminCopyLoadstring() {
-    if (!adminCurrentUrl) return;
-    await navigator.clipboard.writeText(adminCurrentUrl);
-    document.getElementById("adminStatus").textContent = "URL copied.";
+    if (!adminCurrentLoader) return;
+    await navigator.clipboard.writeText(adminCurrentLoader);
+    document.getElementById("adminStatus").textContent = "Loader copied!";
 }
 function adminClear() {
     document.getElementById("adminSource").value = "";
@@ -893,7 +885,7 @@ function adminClear() {
     document.getElementById("adminScriptPicker").value = "";
     document.getElementById("adminResult").style.display = "none";
     document.getElementById("adminStatus").textContent = "Ready.";
-    adminCurrentUrl = ""; setKeyMode("yes");
+    adminCurrentLoader = ""; setKeyMode("yes");
 }
 function escHtml(v) {
     return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -906,7 +898,6 @@ function escHtml(v) {
    ADMIN API
 ================================================= */
 
-/* Draft scripts */
 app.get("/api/admin/drafts", requireAdmin, (req, res) => {
     const drafts = [];
     for (const [id, item] of loaders.entries()) {
@@ -934,7 +925,6 @@ app.delete("/api/admin/drafts/:id", requireAdmin, (req, res) => {
     res.json({ success: true });
 });
 
-/* Active scripts (dari bot via scripts.json) */
 app.get("/api/admin/scripts", requireAdmin, (req, res) => {
     const scripts = loadJson(SCRIPTS_FILE);
     const panels  = getPanels();
@@ -951,7 +941,6 @@ app.get("/api/admin/scripts", requireAdmin, (req, res) => {
     res.json({ success: true, scripts: list });
 });
 
-/* Toggle / delete script aktif */
 app.post("/api/scripts/:id/toggle", requireLogin, (req, res) => {
     const id      = req.params.id;
     const scripts = loadJson(SCRIPTS_FILE);
@@ -976,7 +965,6 @@ app.delete("/api/scripts/:id", requireLogin, (req, res) => {
     res.json({ success: true, id });
 });
 
-/* Panels */
 app.get("/api/admin/panels", requireAdmin, (req, res) => {
     const panels  = getPanels();
     const scripts = loadJson(SCRIPTS_FILE);
@@ -987,7 +975,6 @@ app.get("/api/admin/panels", requireAdmin, (req, res) => {
     res.json({ success: true, panels: list });
 });
 
-/* Users */
 app.get("/api/admin/users", requireAdmin, (req, res) => {
     const list = Object.values(users).sort((a, b) => (b.lastLogin || 0) - (a.lastLogin || 0));
     res.json({ success: true, users: list });
@@ -1016,12 +1003,10 @@ app.get("/api/admin/logs", requireAdmin, (req, res) => {
 });
 
 /* =================================================
-   API: daftar draft untuk bot (/addscript)
-   Bot akan GET ini untuk tampilkan pilihan draft
+   BOT API
 ================================================= */
 
 app.get("/api/bot/drafts", (req, res) => {
-    // Endpoint ini bisa diakses bot via secret header
     const secret = req.headers["x-bot-secret"];
     const cfg    = loadJson(CONFIG_FILE);
     if (cfg.botSecret && secret !== cfg.botSecret) {
@@ -1041,7 +1026,6 @@ app.get("/api/bot/drafts", (req, res) => {
     res.json({ success: true, drafts });
 });
 
-/* Bot POST: publish draft ke script aktif di panel tertentu */
 app.post("/api/bot/publish", (req, res) => {
     const secret = req.headers["x-bot-secret"];
     const cfg    = loadJson(CONFIG_FILE);
@@ -1055,7 +1039,6 @@ app.post("/api/bot/publish", (req, res) => {
     const draft = loaders.get(draftId);
     if (!draft) return res.status(404).json({ error: "Draft not found." });
 
-    // Simpan/update panel
     const panels = getPanels();
     if (!panels[panelId]) {
         panels[panelId] = {
@@ -1067,12 +1050,12 @@ app.post("/api/bot/publish", (req, res) => {
         savePanels(panels);
     }
 
-    // Publish ke scripts.json
-    const scripts   = loadJson(SCRIPTS_FILE);
-    const scriptId  = generateId();
+    const scripts  = loadJson(SCRIPTS_FILE);
+    const scriptId = generateId();
     scripts[scriptId] = {
         id:        scriptId,
         name:      draft.name,
+        source:    draft.source,   // FIX: simpan source supaya tetap bisa diakses setelah draft dihapus
         url:       draft.url,
         key:       draft.key || null,
         enabled:   true,
@@ -1083,11 +1066,11 @@ app.post("/api/bot/publish", (req, res) => {
     };
     saveJson(SCRIPTS_FILE, scripts);
 
-    // Hapus dari draft
+    // Hapus dari draft setelah source sudah tersimpan di scripts
     loaders.delete(draftId);
     saveToDisk(loaders);
 
-    addLog("publish", "bot", "BOT", `Draft "${draft.name}" → Panel "${panelName||panelId}"`);
+    addLog("publish", "bot", "BOT", `Draft "${draft.name}" -> Panel "${panelName||panelId}"`);
 
     res.json({
         success:  true,
@@ -1099,7 +1082,6 @@ app.post("/api/bot/publish", (req, res) => {
     });
 });
 
-/* Bot POST: register panel */
 app.post("/api/bot/panel", (req, res) => {
     const secret = req.headers["x-bot-secret"];
     const cfg    = loadJson(CONFIG_FILE);
@@ -1181,6 +1163,8 @@ button{border:0;border-radius:10px;padding:12px 18px;color:white;font-weight:700
 button:hover{filter:brightness(1.12)}
 .result{display:none;margin-top:22px}
 .resultBox{background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px;color:#b897ff;font-family:Consolas,monospace;font-size:13px;word-break:break-all}
+.btn-copy-result{margin-top:10px;width:100%;background:#2a1a4a;border:0;border-radius:10px;padding:10px;color:#c49dff;font-weight:700;font-size:13px;cursor:pointer}
+.btn-copy-result:hover{filter:brightness(1.15)}
 .status{text-align:center;color:#746e7c;font-size:12px;margin-top:15px}
 .no-access-box{text-align:center;padding:50px 20px;color:#5a5268}
 .no-access-box .icon{font-size:40px;margin-bottom:12px}
@@ -1214,7 +1198,6 @@ button:hover{filter:brightness(1.12)}
 <div class="container">
 <div class="card">
 
-    <!-- PROTECTOR PAGE -->
     <div class="page active" id="page-protector">
         <div class="page-header">
             <div class="page-title">Protector</div>
@@ -1247,8 +1230,9 @@ button:hover{filter:brightness(1.12)}
             <button class="btn-secondary" onclick="clearCode()">Clear</button>
         </div>
         <div class="result" id="result">
-            <div class="form-label">Draft berhasil disimpan</div>
+            <div class="form-label">Loader (aktif setelah admin publish)</div>
             <div class="resultBox" id="loadstring"></div>
+            <button class="btn-copy-result" onclick="copyLoader()">📋 Copy Loader</button>
             <div class="draft-notice">⏳ Script kamu sudah masuk draft. Admin akan me-review dan publish ke panel.</div>
         </div>
         <div class="status" id="status">Ready.</div>
@@ -1267,6 +1251,7 @@ button:hover{filter:brightness(1.12)}
 
 <script>
 let userKeyMode = "yes";
+let currentLoader = "";
 
 function showPage(name) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -1308,16 +1293,23 @@ async function protectCode() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Protection failed.");
-        document.getElementById("loadstring").textContent = "Draft ID: " + data.id + "\n" + data.url;
+        currentLoader = data.loader;
+        document.getElementById("loadstring").textContent = data.loader;
         document.getElementById("result").style.display = "block";
         status.textContent = "Draft berhasil! Tunggu admin publish ke panel.";
     } catch (err) { status.textContent = "❌ " + err.message; }
+}
+async function copyLoader() {
+    if (!currentLoader) return;
+    await navigator.clipboard.writeText(currentLoader);
+    document.getElementById("status").textContent = "Loader copied!";
 }
 function clearCode() {
     document.getElementById("source").value = "";
     document.getElementById("scriptName").value = "";
     document.getElementById("result").style.display = "none";
     document.getElementById("status").textContent = "Ready.";
+    currentLoader = "";
     setUserKeyMode("yes");
 }
 </script>
@@ -1325,7 +1317,7 @@ function clearCode() {
 });
 
 /* =================================================
-   PROTECT API — save ke draft (loaders), bukan scripts
+   PROTECT API
 ================================================= */
 
 app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => {
@@ -1342,10 +1334,9 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
         const protectedSource = protectLuau(source);
         const baseUrl         = `${req.protocol}://${req.get("host")}`;
 
-        let id, scriptKey, url;
+        let id, scriptKey, url, loader;
 
         if (scriptId && loaders.has(scriptId)) {
-            // Update draft existing
             const existing = loaders.get(scriptId);
             id        = scriptId;
             scriptKey = useKey ? (existing.key || generateKey()) : null;
@@ -1358,7 +1349,6 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
                 updatedAt: Date.now(),
             });
         } else {
-            // Draft baru
             id        = generateId();
             scriptKey = useKey ? generateKey() : null;
             url       = `${baseUrl}/files/loaders/${id}.lua`;
@@ -1370,14 +1360,18 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
                 key:           scriptKey,
                 ownerId:       req.session.user.id,
                 ownerUsername: req.session.user.username,
-                published:     false,   // belum di-publish ke panel
+                published:     false,
             });
         }
+
+        // FIX: Bangun loader string langsung di sini, bukan cuma return URL
+        const fullUrl = scriptKey ? `${url}?key=${scriptKey}` : url;
+        loader = `loadstring(game:HttpGet("${fullUrl}"))()`;
 
         saveToDisk(loaders);
         addLog("protect", req.session.user.id, req.session.user.username, "Draft: " + name);
 
-        res.json({ success: true, id, url, key: scriptKey });
+        res.json({ success: true, id, url, key: scriptKey, loader });
 
     } catch (err) {
         console.error(err);
@@ -1387,8 +1381,6 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
 
 /* =================================================
    LOADER ENDPOINT
-   Hanya serve file kalau draft SUDAH dipublish ke scripts.json
-   (artinya sudah di-/addscript oleh bot)
 ================================================= */
 
 app.get("/files/loaders/:id.lua", (req, res) => {
@@ -1402,20 +1394,23 @@ app.get("/files/loaders/:id.lua", (req, res) => {
          userAgent.includes("edg/")    || userAgent.includes("opera")) &&
         (accept.includes("text/html") || accept.includes("application/xhtml+xml"));
 
-    // Cari di scripts aktif berdasarkan draftId yang cocok ATAU scriptId langsung
-    const scripts  = loadJson(SCRIPTS_FILE);
-    const activeEntry = Object.values(scripts).find(sc => sc.draftId === id) || scripts[id];
+    const scripts = loadJson(SCRIPTS_FILE);
+
+    // Cari active entry: by draftId match ATAU scriptId langsung
+    const activeEntry =
+        Object.values(scripts).find(sc => sc.draftId === id) ||
+        scripts[id] ||
+        null;
 
     if (isBrowser) {
-        // Tampilkan halaman info
         const draft = loaders.get(id);
         const item  = activeEntry || draft;
-        if (!item) return res.status(404).type("html").send(`<h1>404</h1><p>Script not found.</p>`);
+        if (!item) return res.status(404).type("html").send(`<!DOCTYPE html><html><head><title>404</title></head><body style="background:#07070a;color:white;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Arial"><div style="text-align:center"><h1 style="color:#9565ff">404</h1><p style="color:#77727f">Script not found.</p></div></body></html>`);
 
-        const baseUrl   = `${req.protocol}://${req.get("host")}`;
-        const loaderUrl = `${baseUrl}/files/loaders/${id}.lua`;
-        const scriptKey = item.key || null;
-        const fullUrl   = scriptKey ? `${loaderUrl}?key=${scriptKey}` : loaderUrl;
+        const baseUrl    = `${req.protocol}://${req.get("host")}`;
+        const loaderUrl  = `${baseUrl}/files/loaders/${id}.lua`;
+        const scriptKey  = item.key || null;
+        const fullUrl    = scriptKey ? `${loaderUrl}?key=${scriptKey}` : loaderUrl;
         const loaderFull = `loadstring(game:HttpGet("${fullUrl}"))()`;
         const isPublished = !!activeEntry;
 
@@ -1435,35 +1430,43 @@ ${isPublished
 </div></body></html>`);
     }
 
-    // Non-browser (executor): hanya serve kalau sudah published
+    // ── NON-BROWSER (executor) ──
+
     if (!activeEntry) {
-        return res.status(403).type("text").send("-- KXLuaprotect: Script belum dipublish.\nerror('Script not published yet.')");
+        return res.status(403).type("text")
+            .send("-- KXLuaprotect: Script belum dipublish.\nerror('Script not published yet.')");
     }
 
     if (!activeEntry.enabled) {
-        return res.status(403).type("text").send("-- KXLuaprotect: Script disabled.\nerror('Script disabled by owner.')");
+        return res.status(403).type("text")
+            .send("-- KXLuaprotect: Script disabled.\nerror('Script disabled by owner.')");
     }
 
     // Key check
     if (activeEntry.key) {
         const providedKey = req.query.key;
         if (!providedKey) {
-            return res.status(403).type("text").send("-- KXLuaprotect: Key required.\nerror('Key required.')");
+            return res.status(403).type("text")
+                .send("-- KXLuaprotect: Key required.\nerror('Key required.')");
         }
         if (providedKey !== activeEntry.key) {
-            return res.status(403).type("text").send("-- KXLuaprotect: Invalid key.\nerror('Invalid key.')");
+            return res.status(403).type("text")
+                .send("-- KXLuaprotect: Invalid key.\nerror('Invalid key.')");
         }
     }
 
-    // Serve source dari draft (masih ada di loaders)
-    const draft = loaders.get(id);
-    const source = draft?.source || activeEntry.source || "";
+    // Ambil source: prioritas dari loaders (draft), fallback ke activeEntry.source (sudah disimpan saat publish)
+    const draftId = activeEntry.draftId || id;
+    const draft   = loaders.get(draftId);
+    const source  = draft?.source || activeEntry.source || "";
 
     if (!source) {
-        return res.status(500).type("text").send("-- KXLuaprotect: Source not found.\nerror('Source missing.')");
+        return res.status(500).type("text")
+            .send("-- KXLuaprotect: Source not found.\nerror('Source missing.')");
     }
 
-    res.status(200).type("text/plain")
+    res.status(200)
+        .type("text/plain")
         .set("Cache-Control", "no-store, no-cache, must-revalidate")
         .set("Pragma", "no-cache")
         .send(source);
