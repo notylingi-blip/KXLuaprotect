@@ -112,18 +112,13 @@ function getAccessRoles() {
     return getAccessConfig().accessRoles || {};
 }
 
-/**
- * Cek apakah user session punya akses ke fitur.
- * user = req.session.user { id, isAdmin, roleIds: [] }
- * roleIds diisi saat OAuth callback dari guilds.members.read.
- */
 function sessionHasAccess(user, feature) {
     if (user.isAdmin) return true;
     const ar         = getAccessRoles();
     const allRoles   = ar["all"] || [];
     const featRoles  = ar[feature] || [];
     const allowed    = [...new Set([...allRoles, ...featRoles])];
-    if (allowed.length === 0) return true; // belum di-set = semua boleh
+    if (allowed.length === 0) return true;
     const userRoles  = user.roleIds || [];
     return allowed.some(rid => userRoles.includes(rid));
 }
@@ -299,7 +294,7 @@ app.get("/auth/callback", async (req, res) => {
             discriminator: userData.discriminator || "0",
             avatar:        userData.avatar,
             isAdmin:       isAdmin,
-            roleIds:       roleIds, // simpan untuk access role check
+            roleIds:       roleIds,
         };
 
         const isBanned = users[userData.id]?.banned || false;
@@ -710,7 +705,7 @@ textarea.form-textarea:focus { border-color: #7040c0; }
         </div>
     </div>
 
-    <!-- PROTECTOR (ADMIN) — pilih dari saved scripts, key Yes/No -->
+    <!-- PROTECTOR (ADMIN) -->
     <div class="page" id="admin-page-protector">
         <div class="page-header">
             <div class="page-title">Protector</div>
@@ -719,7 +714,6 @@ textarea.form-textarea:focus { border-color: #7040c0; }
         <div class="section">
             <div class="proto-form">
 
-                <!-- Pilih script (optional) -->
                 <div>
                     <div class="form-label">Script (pilih yang udah ada / biarkan kosong untuk baru)</div>
                     <select class="form-select" id="adminScriptPicker" onchange="adminPickScript()">
@@ -727,13 +721,11 @@ textarea.form-textarea:focus { border-color: #7040c0; }
                     </select>
                 </div>
 
-                <!-- Nama -->
                 <div>
                     <div class="form-label">Nama Script</div>
                     <input class="form-input" id="adminScriptName" placeholder="e.g. MyHub, KXL_Duel...">
                 </div>
 
-                <!-- Source + upload -->
                 <div>
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                         <div class="form-label" style="margin:0">Source</div>
@@ -745,7 +737,6 @@ textarea.form-textarea:focus { border-color: #7040c0; }
                     <textarea class="form-textarea" id="adminSource" spellcheck="false" placeholder="Paste Luau source di sini..."></textarea>
                 </div>
 
-                <!-- Key: Yes / No -->
                 <div>
                     <div class="form-label">Pakai Key?</div>
                     <div class="key-toggle-group">
@@ -754,7 +745,6 @@ textarea.form-textarea:focus { border-color: #7040c0; }
                     </div>
                 </div>
 
-                <!-- Actions -->
                 <div class="proto-actions">
                     <button class="btn-protect-main" onclick="adminProtect()">🛡 Protect & Save</button>
                     <button class="btn-clear" onclick="adminClear()">Clear</button>
@@ -762,7 +752,6 @@ textarea.form-textarea:focus { border-color: #7040c0; }
 
             </div>
 
-            <!-- Result -->
             <div id="adminResult" style="display:none;margin-top:20px">
                 <div class="form-label" style="margin-bottom:8px">Loader</div>
                 <div class="result-box" id="adminLoadstring"></div>
@@ -896,7 +885,7 @@ function filterLogs() {
 
 /* ── PROTECTOR ── */
 let adminCurrentUrl = "", adminCurrentLoadstring = "";
-let keyMode = "yes"; // "yes" | "no"
+let keyMode = "yes";
 
 async function loadAdminScriptPicker() {
     const sel = document.getElementById("adminScriptPicker");
@@ -961,7 +950,6 @@ async function adminProtect() {
         document.getElementById("adminLoadstring").textContent = adminCurrentLoadstring;
         document.getElementById("adminResult").style.display = "block";
         status.textContent = "✅ Protected! Script disimpan.";
-        // refresh picker
         loadAdminScriptPicker();
     } catch (err) { status.textContent = "❌ " + err.message; }
 }
@@ -1043,7 +1031,6 @@ app.get("/", requireLogin, (req, res) => {
     const user = req.session.user;
     if (user.isAdmin) return res.redirect("/admin");
 
-    // Cek akses fitur protect
     const canProtect = sessionHasAccess(user, "protect");
 
     const avatarUrl = user.avatar
@@ -1088,19 +1075,6 @@ body { min-height: 100vh; background: radial-gradient(circle at top, #26133e 0%,
 .form-input { width: 100%; background: #08080c; color: #e8e4ed; border: 1px solid #302a39; border-radius: 12px; padding: 12px 15px; outline: none; font-family: Arial, sans-serif; font-size: 14px; transition: border-color .15s; }
 .form-input:focus { border-color: #895cff; }
 .form-input::placeholder { color: #4a4452; }
-.form-select {
-    width: 100%; background: #08080c; color: #e8e4ed;
-    border: 1px solid #302a39; border-radius: 12px;
-    padding: 12px 15px; outline: none; font-size: 14px;
-    cursor: pointer; transition: border-color .15s;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237a6f85' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-    padding-right: 38px;
-}
-.form-select:focus { border-color: #895cff; }
-.form-select option { background: #100e18; }
 textarea { width: 100%; height: 300px; resize: vertical; background: #08080c; color: #e8e4ed; border: 1px solid #302a39; border-radius: 12px; padding: 15px; outline: none; font-family: Consolas, monospace; font-size: 13px; line-height: 1.55; transition: border-color .15s; }
 textarea:focus { border-color: #895cff; }
 .input-group { margin-bottom: 14px; }
@@ -1207,10 +1181,6 @@ button:hover { filter: brightness(1.12); }
             <button class="btn-secondary" onclick="clearCode()">Clear</button>
         </div>
         <div class="result" id="result">
-            <div class="key-box" style="display:none;margin-bottom:14px;background:#1a0f00;border:1px solid #5a3a00;border-radius:10px;padding:12px 14px">
-                <div class="form-label" style="color:#f0c060;margin-bottom:6px">🔑 Script Key — Jangan share!</div>
-                <div id="scriptKeyDisplay" style="font-family:Consolas,monospace;font-size:13px;color:#ffd580;word-break:break-all"></div>
-            </div>
             <div class="form-label">Loader</div>
             <div class="resultBox" id="loadstring"></div>
             <div class="buttons">
@@ -1242,7 +1212,7 @@ button:hover { filter: brightness(1.12); }
 </div>
 
 <script>
-let currentUrl = "", currentLoadstring = "", currentKey = "";
+let currentUrl = "", currentLoadstring = "";
 let userKeyMode = "yes";
 
 function showPage(name) {
@@ -1290,20 +1260,10 @@ async function protectCode() {
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Protection failed.");
-        currentUrl         = data.url;
-        currentKey         = data.key || "";
-        currentLoadstring  = data.loadstring;
+        currentUrl        = data.url;
+        currentLoadstring = data.loadstring;
         document.getElementById("loadstring").textContent = currentLoadstring;
         document.getElementById("result").style.display = "block";
-        const keyEl = document.getElementById("scriptKeyDisplay");
-        if (keyEl) {
-            if (currentKey) {
-                keyEl.textContent = currentKey;
-                keyEl.closest(".key-box").style.display = "block";
-            } else {
-                keyEl.closest(".key-box").style.display = "none";
-            }
-        }
         status.textContent = "Protected successfully.";
     } catch (err) { status.textContent = "❌ " + err.message; }
 }
@@ -1323,9 +1283,7 @@ function clearCode() {
     document.getElementById("scriptName").value = "";
     document.getElementById("result").style.display = "none";
     document.getElementById("status").textContent = "Ready.";
-    currentUrl = ""; currentLoadstring = ""; currentKey = "";
-    const keyEl = document.getElementById("scriptKeyDisplay");
-    if (keyEl) keyEl.closest(".key-box").style.display = "none";
+    currentUrl = ""; currentLoadstring = "";
     setUserKeyMode("yes");
 }
 
@@ -1339,7 +1297,7 @@ function renderScripts() {
                 <div class="script-info">
                     <div class="script-name">\${escHtml(s.name)}</div>
                     <div class="script-meta">\${escHtml(s.url)}</div>
-                    \${s.key ? \`<div class="script-meta" style="color:#f0c060;margin-top:2px">🔑 \${escHtml(s.key)}</div>\` : '<div class="script-meta" style="color:#7cdc9a;margin-top:2px">🔓 Tanpa Key</div>'}
+                    \${s.key ? \`<div class="script-meta" style="color:#f0c060;margin-top:2px">🔑 Key aktif</div>\` : '<div class="script-meta" style="color:#7cdc9a;margin-top:2px">🔓 Tanpa Key</div>'}
                 </div>
                 <div class="script-actions">
                     <div class="toggle-wrap">
@@ -1378,15 +1336,16 @@ function escHtml(v) {
 });
 
 /* =================================================
-   PROTECT API — support useKey + scriptId (update)
+   PROTECT API
+   FIX: key sekarang di-embed langsung di URL loader
 ================================================= */
 
 app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => {
     const source   = req.body?.source;
     const name     = typeof req.body?.name === "string" && req.body.name.trim()
         ? req.body.name.trim() : "Untitled Script";
-    const useKey   = req.body?.useKey !== false; // default true
-    const scriptId = req.body?.scriptId || null; // update existing script jika ada
+    const useKey   = req.body?.useKey !== false;
+    const scriptId = req.body?.scriptId || null;
 
     if (typeof source !== "string") return res.status(400).json({ error: "Invalid source." });
     if (!source.trim())             return res.status(400).json({ error: "Source is empty." });
@@ -1398,11 +1357,10 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
         let id, scriptKey, url;
 
         if (scriptId && loaders.has(scriptId)) {
-            // Update script yang sudah ada
             const existing = loaders.get(scriptId);
             id         = scriptId;
             scriptKey  = useKey ? (existing.key || generateKey()) : null;
-            url        = existing.url; // URL tetap sama
+            url        = existing.url;
             loaders.set(id, {
                 ...existing,
                 name,
@@ -1412,7 +1370,6 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
                 enabled:   true,
             });
         } else {
-            // Buat script baru
             id        = generateId();
             scriptKey = useKey ? generateKey() : null;
             url       = `${baseUrl}/files/loaders/${id}.lua`;
@@ -1431,9 +1388,9 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
         saveToDisk(loaders);
         addLog("protect", req.session.user.id, req.session.user.username, (scriptId ? "Updated" : "Protected") + ": " + name);
 
-        const loadstring = scriptKey
-            ? `script_key = "${scriptKey}"\nloadstring(game:HttpGet("${url}"))()`
-            : `loadstring(game:HttpGet("${url}"))()`;
+        // FIX: key di-embed langsung di URL, bukan sebagai variable terpisah
+        const loaderUrl  = scriptKey ? `${url}?key=${scriptKey}` : url;
+        const loadstring = `loadstring(game:HttpGet("${loaderUrl}"))()`;
 
         res.json({ success: true, id, url, key: scriptKey, loadstring });
 
@@ -1503,6 +1460,7 @@ app.get("/api/validate", (req, res) => {
 
 /* =================================================
    LOADER
+   FIX: browser view juga pakai URL+key format baru
 ================================================= */
 
 app.get("/files/loaders/:id.lua", (req, res) => {
@@ -1520,17 +1478,17 @@ app.get("/files/loaders/:id.lua", (req, res) => {
         const baseUrl    = `${req.protocol}://${req.get("host")}`;
         const loaderUrl  = `${baseUrl}/files/loaders/${id}.lua`;
         const scriptKey  = item.key || null;
-        const loaderFull = scriptKey
-            ? `script_key = "${scriptKey}"\nloadstring(game:HttpGet("${loaderUrl}"))()`
-            : `loadstring(game:HttpGet("${loaderUrl}"))()`;
+        // FIX: key embed di URL untuk browser view juga
+        const fullUrl    = scriptKey ? `${loaderUrl}?key=${scriptKey}` : loaderUrl;
+        const loaderFull = `loadstring(game:HttpGet("${fullUrl}"))()`;
+
         return res.status(200).type("html").send(`
 <!DOCTYPE html><html><head><meta charset="UTF-8"><title>KXLuaprotect</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at top,#26133e 0%,#0b0910 45%,#050507 100%);color:white;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}.card{width:min(680px,100%);padding:40px 28px;border-radius:18px;background:rgba(14,13,19,.96);border:1px solid #2b2535;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5)}.icon{font-size:40px;margin-bottom:14px}h1{color:#c9a8ff;font-size:24px;font-weight:900}p{color:#7a7085;margin:12px auto 22px;font-size:14px}.block{text-align:left;background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px 15px;margin-bottom:10px}.block-title{color:#6b6076;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px}.block-code{color:#b897ff;font-family:Consolas,monospace;font-size:13px;white-space:pre;overflow-x:auto;display:block}button{width:100%;margin-top:4px;border:0;border-radius:10px;padding:13px;background:#8051f5;color:white;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:6px}.note{margin-top:12px;color:#4e4558;font-size:12px}.key-val{color:#f0c060;font-family:Consolas,monospace;font-size:13px;word-break:break-all}</style>
-</head><body><div class="card"><div class="icon">🔑</div><h1>${escapeHtml(item.name)}</h1><p>Paste loader ini ke executor kamu.${scriptKey ? " Jangan share key ke orang lain!" : ""}</p>
-${scriptKey ? `<div class="block"><div class="block-title">KEY</div><div class="block-code key-val">${escapeHtml(scriptKey)}</div></div>` : ""}
+<style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at top,#26133e 0%,#0b0910 45%,#050507 100%);color:white;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}.card{width:min(680px,100%);padding:40px 28px;border-radius:18px;background:rgba(14,13,19,.96);border:1px solid #2b2535;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5)}.icon{font-size:40px;margin-bottom:14px}h1{color:#c9a8ff;font-size:24px;font-weight:900}p{color:#7a7085;margin:12px auto 22px;font-size:14px}.block{text-align:left;background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px 15px;margin-bottom:10px}.block-title{color:#6b6076;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px}.block-code{color:#b897ff;font-family:Consolas,monospace;font-size:13px;white-space:pre;overflow-x:auto;display:block}button{width:100%;margin-top:4px;border:0;border-radius:10px;padding:13px;background:#8051f5;color:white;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:6px}.note{margin-top:12px;color:#4e4558;font-size:12px}</style>
+</head><body><div class="card"><div class="icon">🛡</div><h1>${escapeHtml(item.name)}</h1><p>Paste loader ini ke executor kamu.</p>
 <div class="block"><div class="block-title">LOADER</div><div class="block-code">${escapeHtml(loaderFull)}</div></div>
-<button onclick="navigator.clipboard.writeText(${JSON.stringify(loaderFull)}).then(()=>this.textContent='✅ Copied!').catch(()=>{})">📋 Copy Full Loader</button>
-<div class="note">KXLuaprotect${scriptKey ? " — Jangan share key ke siapapun." : " — Script tanpa key protection."}</div></div></body></html>
+<button onclick="navigator.clipboard.writeText(${JSON.stringify(loaderFull)}).then(()=>this.textContent='✅ Copied!').catch(()=>{})">📋 Copy Loader</button>
+<div class="note">KXLuaprotect${scriptKey ? " — Script protected dengan key." : " — Script tanpa key protection."}</div></div></body></html>
         `);
     }
 
