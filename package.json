@@ -1,17 +1,16 @@
 {
-  "name": "kxluaprotect",
+  "name": "spideyprotect",
   "version": "1.0.0",
+  "description": "SpideyProtect Lua Protection Server",
+  "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node -e \"require('./server.js'); require('./bot.js');\""
-  },
-  "dependencies": {
-    "discord.js": "^14.15.3",
-    "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "node-fetch": "^2.7.0"
+    "start": "node server.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
   }
 }
