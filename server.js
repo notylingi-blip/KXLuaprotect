@@ -16,9 +16,10 @@ const CONFIG = {
     DISCORD_CLIENT_ID:     process.env.DISCORD_CLIENT_ID     || "1540862780545179698",
     DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET || "uXbmfOyb-uABovU_rPesCqSafIEnwL6Q",
     REDIRECT_URI:          process.env.REDIRECT_URI           || "https://kxluaprotect-production-a8eb.up.railway.app/auth/callback",
-    ADMIN_ROLE_ID:         process.env.ADMIN_ROLE_ID          || "1530094098856546445",
-    GUILD_ID:              process.env.GUILD_ID               || "1530091511851520180",
     SESSION_SECRET:        process.env.SESSION_SECRET         || "ead80b0426fd022d56215c83271d23e70e44e4ab8d4c95be3d5f9976354fe462",
+    // Admin web panel: cukup Discord user ID, bebas dari guild/role manapun
+    // Untuk tambah admin lain, set env: ADMIN_USER_IDS=id1,id2,id3
+    ADMIN_USER_IDS:        (process.env.ADMIN_USER_IDS || "1485940617342353594").split(",").map(s => s.trim()).filter(Boolean),
 };
 
 /* =================================================
@@ -100,13 +101,14 @@ function getAccessRoles()  { return getAccessConfig().accessRoles || {}; }
 
 function sessionHasAccess(user, feature) {
     if (user.isAdmin) return true;
-    const ar        = getAccessRoles();
-    const allRoles  = ar["all"]     || [];
-    const featRoles = ar[feature]   || [];
-    const allowed   = [...new Set([...allRoles, ...featRoles])];
-    if (allowed.length === 0) return true;
-    const userRoles = user.roleIds || [];
-    return allowed.some(rid => userRoles.includes(rid));
+    // Non-admin: cek config accessUserIds per feature
+    const cfg           = getAccessConfig();
+    const accessUsers   = cfg.accessUserIds || {};
+    const allUsers      = accessUsers["all"]     || [];
+    const featUsers     = accessUsers[feature]   || [];
+    const allowed       = [...new Set([...allUsers, ...featUsers])];
+    if (allowed.length === 0) return true;   // kalau belum dikonfigurasi, semua boleh
+    return allowed.includes(user.id);
 }
 
 /* =================================================
@@ -230,7 +232,7 @@ app.get("/auth/login", (req, res) => {
         client_id:     CONFIG.DISCORD_CLIENT_ID,
         redirect_uri:  CONFIG.REDIRECT_URI,
         response_type: "code",
-        scope:         "identify guilds.members.read",
+        scope:         "identify",
     });
     res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
 });
@@ -258,18 +260,8 @@ app.get("/auth/callback", async (req, res) => {
         });
         const userData = await userRes.json();
 
-        let isAdmin = false, roleIds = [];
-        try {
-            const memberRes  = await fetch(
-                `https://discord.com/api/users/@me/guilds/${CONFIG.GUILD_ID}/member`,
-                { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
-            );
-            const memberData = await memberRes.json();
-            if (memberData.roles) {
-                roleIds = memberData.roles;
-                if (memberData.roles.includes(CONFIG.ADMIN_ROLE_ID)) isAdmin = true;
-            }
-        } catch (e) {}
+        // Admin check: cukup cek user ID, bebas dari guild/role manapun
+        const isAdmin = CONFIG.ADMIN_USER_IDS.includes(userData.id);
 
         const user = {
             id:            userData.id,
@@ -277,7 +269,6 @@ app.get("/auth/callback", async (req, res) => {
             discriminator: userData.discriminator || "0",
             avatar:        userData.avatar,
             isAdmin,
-            roleIds,
         };
 
         if (users[userData.id]?.banned) {
@@ -287,10 +278,13 @@ app.get("/auth/callback", async (req, res) => {
 
         req.session.user = user;
         users[userData.id] = {
-            ...user,
+            id:         userData.id,
+            username:   userData.username,
+            avatar:     userData.avatar,
+            isAdmin,
             lastLogin:  Date.now(),
             firstLogin: users[userData.id]?.firstLogin || Date.now(),
-            banned:     false,
+            banned:     users[userData.id]?.banned || false,
         };
         saveJson(USERS_FILE, users);
         addLog("login", userData.id, userData.username, isAdmin ? "Admin login" : "User login");
@@ -461,6 +455,11 @@ textarea.form-textarea:focus{border-color:#7040c0}
 .proto-status{text-align:center;color:#4a4258;font-size:12px;margin-top:10px}
 .draft-info{background:#1a1000;border:1px solid #4a3000;border-radius:10px;padding:12px 16px;color:#e0a030;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
 .draft-info strong{color:#f0c040}
+.mode-toggle-group{display:flex;gap:10px;margin-bottom:4px}
+.mode-toggle-btn{flex:1;padding:11px 10px;border-radius:10px;border:1px solid #2a2040;background:#08080f;color:#7a6f85;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s;text-align:center;line-height:1.3}
+.mode-toggle-btn.active-draft{background:linear-gradient(135deg,#2a1500,#1e0e00);color:#f0a030;border-color:#7a4000}
+.mode-toggle-btn.active-direct{background:linear-gradient(135deg,#0a2a15,#071a0d);color:#7cdc9a;border-color:#1a5a30}
+.mode-hint{font-size:11px;color:#3a3048;text-align:center;margin-top:4px}
 @media(max-width:768px){
     .sidebar{width:60px}
     .sidebar-logo .logo-text,.sidebar-logo .admin-tag,.nav-item span,.sidebar-username{display:none}
@@ -599,12 +598,19 @@ textarea.form-textarea:focus{border-color:#7040c0}
 
 <!-- PROTECTOR -->
 <div class="page" id="admin-page-protector">
-    <div class="page-header"><div class="page-title">Protector</div><div class="page-sub">Protect script Luau — hasil masuk ke Draft, publish via /addscript di Discord</div></div>
-    <div class="draft-info">📝 <div>Script yang di-protect akan masuk <strong>Draft</strong>. Jalankan <strong>/addscript</strong> di bot Discord untuk memilih draft dan mempublishnya ke panel.</div></div>
+    <div class="page-header"><div class="page-title">Protector</div><div class="page-sub">Protect script Luau — pilih mode Draft atau Direct</div></div>
     <div class="section">
         <div class="proto-form">
             <div>
-                <div class="form-label">Script (pilih draft yang udah ada / biarkan kosong untuk baru)</div>
+                <div class="form-label">Mode</div>
+                <div class="mode-toggle-group">
+                    <button class="mode-toggle-btn active-draft" id="modeBtnDraft" onclick="setAdminMode('draft')">📝 Draft<br><span style="font-size:11px;font-weight:400;opacity:.8">Perlu /addscript bot</span></button>
+                    <button class="mode-toggle-btn" id="modeBtnDirect" onclick="setAdminMode('direct')">⚡ Direct<br><span style="font-size:11px;font-weight:400;opacity:.8">Langsung aktif</span></button>
+                </div>
+                <div class="mode-hint" id="adminModeHint">Mode Draft: script disimpan sebagai draft, perlu dijalankan /addscript di Discord bot untuk publish ke panel.</div>
+            </div>
+            <div id="adminDraftPickerWrap">
+                <div class="form-label">Update draft existing (opsional)</div>
                 <select class="form-select" id="adminScriptPicker" onchange="adminPickScript()">
                     <option value="">— Buat Draft Baru —</option>
                 </select>
@@ -631,13 +637,13 @@ textarea.form-textarea:focus{border-color:#7040c0}
                 </div>
             </div>
             <div class="proto-actions">
-                <button class="btn-protect-main" onclick="adminProtect()">🛡 Protect & Save Draft</button>
+                <button class="btn-protect-main" id="adminProtectBtn" onclick="adminProtect()">🛡 Protect & Save Draft</button>
                 <button class="btn-clear" onclick="adminClear()">Clear</button>
             </div>
         </div>
 
         <div id="adminResult" style="display:none;margin-top:20px">
-            <div class="form-label" style="margin-bottom:8px">Loader (siap pakai setelah di-/addscript)</div>
+            <div class="form-label" style="margin-bottom:8px" id="adminResultLabel">Loader</div>
             <div class="result-box" id="adminLoadstring"></div>
             <div class="result-actions">
                 <button class="btn-copy" onclick="adminCopyLoadstring()">📋 Copy Loader</button>
@@ -818,7 +824,23 @@ function filterLogs() {
 }
 
 /* ── PROTECTOR ── */
-let adminCurrentLoader = "", keyMode = "yes";
+let adminCurrentLoader = "", keyMode = "yes", adminMode = "draft";
+
+function setAdminMode(mode) {
+    adminMode = mode;
+    const isDraft = mode === "draft";
+    document.getElementById("modeBtnDraft").className  = "mode-toggle-btn" + (isDraft  ? " active-draft"  : "");
+    document.getElementById("modeBtnDirect").className = "mode-toggle-btn" + (!isDraft ? " active-direct" : "");
+    document.getElementById("adminDraftPickerWrap").style.display = isDraft ? "" : "none";
+    document.getElementById("adminModeHint").textContent = isDraft
+        ? "Mode Draft: script disimpan sebagai draft, perlu /addscript di Discord bot untuk publish ke panel."
+        : "Mode Direct: script langsung aktif & bisa dipakai executor tanpa perlu publish ke panel.";
+    document.getElementById("adminProtectBtn").textContent = isDraft
+        ? "🛡 Protect & Save Draft"
+        : "⚡ Protect & Aktifkan Langsung";
+    document.getElementById("adminResult").style.display = "none";
+    document.getElementById("adminStatus").textContent = "Ready.";
+}
 
 async function loadAdminScriptPicker() {
     const sel = document.getElementById("adminScriptPicker");
@@ -835,7 +857,7 @@ function adminPickScript() {
     if (!id) return;
     const name = sel.options[sel.selectedIndex].dataset.name || "";
     document.getElementById("adminScriptName").value = name;
-    document.getElementById("adminStatus").textContent = "Draft dipilih: " + name + ". Paste source baru lalu klik Protect & Save Draft.";
+    document.getElementById("adminStatus").textContent = "Draft dipilih: " + name + ". Paste source baru lalu klik Protect.";
 }
 function setKeyMode(mode) {
     keyMode = mode;
@@ -855,7 +877,7 @@ function adminHandleUpload(input) {
 async function adminProtect() {
     const source   = document.getElementById("adminSource").value;
     const nameVal  = document.getElementById("adminScriptName").value.trim();
-    const scriptId = document.getElementById("adminScriptPicker").value || null;
+    const scriptId = adminMode === "draft" ? (document.getElementById("adminScriptPicker").value || null) : null;
     const status   = document.getElementById("adminStatus");
     if (!source.trim()) { status.textContent = "Paste Luau source dulu."; return; }
     status.textContent = "Protecting...";
@@ -863,15 +885,27 @@ async function adminProtect() {
         const response = await fetch("/api/protect", {
             method: "POST",
             headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({ source, name: nameVal||"Untitled Script", useKey: keyMode==="yes", scriptId: scriptId||undefined })
+            body: JSON.stringify({
+                source,
+                name:     nameVal || "Untitled Script",
+                useKey:   keyMode === "yes",
+                mode:     adminMode,
+                scriptId: scriptId || undefined
+            })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Protection failed.");
         adminCurrentLoader = data.loader;
         document.getElementById("adminLoadstring").textContent = data.loader;
+        document.getElementById("adminResultLabel").textContent = adminMode === "draft"
+            ? "Loader (aktif setelah /addscript)"
+            : "Loader (langsung aktif ✅)";
         document.getElementById("adminResult").style.display = "block";
-        status.textContent = "✅ Draft disimpan! Jalankan /addscript di Discord untuk publish ke panel.";
-        loadAdminScriptPicker();
+        status.textContent = adminMode === "draft"
+            ? "✅ Draft disimpan! Jalankan /addscript di Discord untuk publish ke panel."
+            : "✅ Script langsung aktif! Loader siap dipakai.";
+        if (adminMode === "draft") loadAdminScriptPicker();
+        else loadAdminScripts();
     } catch (err) { status.textContent = "❌ " + err.message; }
 }
 async function adminCopyLoadstring() {
@@ -882,7 +916,7 @@ async function adminCopyLoadstring() {
 function adminClear() {
     document.getElementById("adminSource").value = "";
     document.getElementById("adminScriptName").value = "";
-    document.getElementById("adminScriptPicker").value = "";
+    if (document.getElementById("adminScriptPicker")) document.getElementById("adminScriptPicker").value = "";
     document.getElementById("adminResult").style.display = "none";
     document.getElementById("adminStatus").textContent = "Ready.";
     adminCurrentLoader = ""; setKeyMode("yes");
@@ -1171,11 +1205,17 @@ button:hover{filter:brightness(1.12)}
 .no-access-box .title{font-size:16px;font-weight:700;color:#7a6f85;margin-bottom:6px}
 .no-access-box .sub{font-size:13px}
 .draft-notice{background:#1a1000;border:1px solid #4a3000;border-radius:10px;padding:10px 14px;color:#e0a030;font-size:12px;margin-top:14px;text-align:center}
+.direct-notice{background:#071a0d;border:1px solid #1a5a30;border-radius:10px;padding:10px 14px;color:#7cdc9a;font-size:12px;margin-top:14px;text-align:center}
 .footer{text-align:center;color:#2e2a33;font-size:12px;margin-top:22px}
+.umode-group{display:flex;gap:10px;margin-bottom:4px}
+.umode-btn{flex:1;padding:10px;border-radius:10px;border:1px solid #302a39;background:#08080c;color:#6e6679;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s;line-height:1.3}
+.umode-btn.active-draft{background:linear-gradient(135deg,#2a1500,#1e0e00);color:#f0a030;border-color:#7a4000}
+.umode-btn.active-direct{background:linear-gradient(135deg,#071a0d,#041208);color:#7cdc9a;border-color:#1a5a30}
+.umode-hint{font-size:11px;color:#4a4452;text-align:center;margin-top:4px;margin-bottom:6px}
 @media(max-width:650px){
     .logo{font-size:18px}.user-name{display:none}
     textarea{height:220px}
-    .buttons,.key-toggle-group{flex-direction:column}
+    .buttons,.key-toggle-group,.umode-group{flex-direction:column}
 }
 </style></head><body>
 <div class="topbar">
@@ -1201,9 +1241,17 @@ button:hover{filter:brightness(1.12)}
     <div class="page active" id="page-protector">
         <div class="page-header">
             <div class="page-title">Protector</div>
-            <div class="page-sub">Protect script Luau kamu — hasil masuk ke draft, tunggu admin publish.</div>
+            <div class="page-sub">Protect script Luau kamu.</div>
         </div>
         ${canProtect ? `
+        <div class="input-group">
+            <div class="form-label">Mode</div>
+            <div class="umode-group">
+                <button class="umode-btn active-draft" id="uModeDraft" onclick="setUserMode('draft')">📝 Draft<br><span style="font-size:11px;font-weight:400;opacity:.8">Perlu admin publish</span></button>
+                <button class="umode-btn" id="uModeDirect" onclick="setUserMode('direct')">⚡ Direct<br><span style="font-size:11px;font-weight:400;opacity:.8">Langsung aktif</span></button>
+            </div>
+            <div class="umode-hint" id="userModeHint">Mode Draft: script masuk antrian, tunggu admin publish ke panel.</div>
+        </div>
         <div class="input-group">
             <div class="form-label">Nama Script</div>
             <input type="text" class="form-input" id="scriptName" placeholder="e.g. MyHub, BloomixV2...">
@@ -1226,14 +1274,14 @@ button:hover{filter:brightness(1.12)}
             </div>
         </div>
         <div class="buttons">
-            <button class="btn-protect" onclick="protectCode()">🛡 Protect & Submit Draft</button>
+            <button class="btn-protect" id="userProtectBtn" onclick="protectCode()">🛡 Protect & Submit Draft</button>
             <button class="btn-secondary" onclick="clearCode()">Clear</button>
         </div>
         <div class="result" id="result">
-            <div class="form-label">Loader (aktif setelah admin publish)</div>
+            <div class="form-label" id="userResultLabel">Loader</div>
             <div class="resultBox" id="loadstring"></div>
             <button class="btn-copy-result" onclick="copyLoader()">📋 Copy Loader</button>
-            <div class="draft-notice">⏳ Script kamu sudah masuk draft. Admin akan me-review dan publish ke panel.</div>
+            <div id="userResultNotice"></div>
         </div>
         <div class="status" id="status">Ready.</div>
         ` : `
@@ -1250,8 +1298,23 @@ button:hover{filter:brightness(1.12)}
 </div>
 
 <script>
-let userKeyMode = "yes";
+let userKeyMode = "yes", userMode = "draft";
 let currentLoader = "";
+
+function setUserMode(mode) {
+    userMode = mode;
+    const isDraft = mode === "draft";
+    document.getElementById("uModeDraft").className  = "umode-btn" + (isDraft  ? " active-draft"  : "");
+    document.getElementById("uModeDirect").className = "umode-btn" + (!isDraft ? " active-direct" : "");
+    document.getElementById("userModeHint").textContent = isDraft
+        ? "Mode Draft: script masuk antrian, tunggu admin publish ke panel."
+        : "Mode Direct: script langsung aktif & loader siap dipakai sekarang.";
+    document.getElementById("userProtectBtn").textContent = isDraft
+        ? "🛡 Protect & Submit Draft"
+        : "⚡ Protect & Aktifkan Langsung";
+    document.getElementById("result").style.display = "none";
+    document.getElementById("status").textContent = "Ready.";
+}
 
 function showPage(name) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -1289,14 +1352,27 @@ async function protectCode() {
         const response = await fetch("/api/protect", {
             method: "POST",
             headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({ source, name: nameVal||"Untitled Script", useKey: userKeyMode==="yes" })
+            body: JSON.stringify({ source, name: nameVal||"Untitled Script", useKey: userKeyMode==="yes", mode: userMode })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Protection failed.");
         currentLoader = data.loader;
         document.getElementById("loadstring").textContent = data.loader;
+        document.getElementById("userResultLabel").textContent = userMode === "draft"
+            ? "Loader (aktif setelah admin publish)"
+            : "Loader (langsung aktif ✅)";
+        const noticeEl = document.getElementById("userResultNotice");
+        if (userMode === "draft") {
+            noticeEl.className = "draft-notice";
+            noticeEl.textContent = "⏳ Script kamu sudah masuk draft. Admin akan me-review dan publish ke panel.";
+        } else {
+            noticeEl.className = "direct-notice";
+            noticeEl.textContent = "✅ Script langsung aktif! Loader siap dipakai di executor sekarang.";
+        }
         document.getElementById("result").style.display = "block";
-        status.textContent = "Draft berhasil! Tunggu admin publish ke panel.";
+        status.textContent = userMode === "draft"
+            ? "Draft berhasil! Tunggu admin publish ke panel."
+            : "Script aktif! Loader siap dipakai.";
     } catch (err) { status.textContent = "❌ " + err.message; }
 }
 async function copyLoader() {
@@ -1311,6 +1387,7 @@ function clearCode() {
     document.getElementById("status").textContent = "Ready.";
     currentLoader = "";
     setUserKeyMode("yes");
+    setUserMode("draft");
 }
 </script>
 </body></html>`);
@@ -1325,6 +1402,7 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
     const name     = typeof req.body?.name === "string" && req.body.name.trim()
         ? req.body.name.trim() : "Untitled Script";
     const useKey   = req.body?.useKey !== false;
+    const mode     = req.body?.mode === "direct" ? "direct" : "draft";   // default draft
     const scriptId = req.body?.scriptId || null;
 
     if (typeof source !== "string") return res.status(400).json({ error: "Invalid source." });
@@ -1336,42 +1414,67 @@ app.post("/api/protect", requireLogin, requireFeature("protect"), (req, res) => 
 
         let id, scriptKey, url, loader;
 
-        if (scriptId && loaders.has(scriptId)) {
-            const existing = loaders.get(scriptId);
-            id        = scriptId;
-            scriptKey = useKey ? (existing.key || generateKey()) : null;
-            url       = existing.url;
-            loaders.set(id, {
-                ...existing,
-                name,
-                source:    protectedSource,
-                key:       scriptKey,
-                updatedAt: Date.now(),
-            });
-        } else {
+        if (mode === "direct") {
+            // ── DIRECT MODE: langsung masuk scripts.json sebagai active script ──
             id        = generateId();
             scriptKey = useKey ? generateKey() : null;
             url       = `${baseUrl}/files/loaders/${id}.lua`;
-            loaders.set(id, {
+
+            const scripts = loadJson(SCRIPTS_FILE);
+            scripts[id] = {
+                id,
                 name,
                 source:        protectedSource,
-                createdAt:     Date.now(),
                 url,
                 key:           scriptKey,
+                enabled:       true,
+                createdAt:     Date.now(),
+                panelId:       null,
+                draftId:       null,
                 ownerId:       req.session.user.id,
                 ownerUsername: req.session.user.username,
-                published:     false,
-            });
+                direct:        true,   // flag buat bedain dari script yg di-publish bot
+            };
+            saveJson(SCRIPTS_FILE, scripts);
+            addLog("protect", req.session.user.id, req.session.user.username, "Direct: " + name);
+
+        } else {
+            // ── DRAFT MODE: masuk loaders (draft), perlu /addscript bot ──
+            if (scriptId && loaders.has(scriptId)) {
+                const existing = loaders.get(scriptId);
+                id        = scriptId;
+                scriptKey = useKey ? (existing.key || generateKey()) : null;
+                url       = existing.url;
+                loaders.set(id, {
+                    ...existing,
+                    name,
+                    source:    protectedSource,
+                    key:       scriptKey,
+                    updatedAt: Date.now(),
+                });
+            } else {
+                id        = generateId();
+                scriptKey = useKey ? generateKey() : null;
+                url       = `${baseUrl}/files/loaders/${id}.lua`;
+                loaders.set(id, {
+                    name,
+                    source:        protectedSource,
+                    createdAt:     Date.now(),
+                    url,
+                    key:           scriptKey,
+                    ownerId:       req.session.user.id,
+                    ownerUsername: req.session.user.username,
+                    published:     false,
+                });
+            }
+            saveToDisk(loaders);
+            addLog("protect", req.session.user.id, req.session.user.username, "Draft: " + name);
         }
 
-        // FIX: Bangun loader string langsung di sini, bukan cuma return URL
         const fullUrl = scriptKey ? `${url}?key=${scriptKey}` : url;
         loader = `loadstring(game:HttpGet("${fullUrl}"))()`;
 
-        saveToDisk(loaders);
-        addLog("protect", req.session.user.id, req.session.user.username, "Draft: " + name);
-
-        res.json({ success: true, id, url, key: scriptKey, loader });
+        res.json({ success: true, id, url, key: scriptKey, loader, mode });
 
     } catch (err) {
         console.error(err);
@@ -1396,10 +1499,12 @@ app.get("/files/loaders/:id.lua", (req, res) => {
 
     const scripts = loadJson(SCRIPTS_FILE);
 
-    // Cari active entry: by draftId match ATAU scriptId langsung
+    // Cari active entry:
+    // 1. Direct script: scripts[id] langsung (id = scriptId)
+    // 2. Draft yg udah dipublish: cari by draftId
     const activeEntry =
-        Object.values(scripts).find(sc => sc.draftId === id) ||
         scripts[id] ||
+        Object.values(scripts).find(sc => sc.draftId === id) ||
         null;
 
     if (isBrowser) {
@@ -1412,15 +1517,17 @@ app.get("/files/loaders/:id.lua", (req, res) => {
         const scriptKey  = item.key || null;
         const fullUrl    = scriptKey ? `${loaderUrl}?key=${scriptKey}` : loaderUrl;
         const loaderFull = `loadstring(game:HttpGet("${fullUrl}"))()`;
-        const isPublished = !!activeEntry;
+        const isActive  = !!activeEntry;
+        const isDirect  = isActive && !!activeEntry.direct;
 
         return res.status(200).type("html").send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>KXLuaprotect</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at top,#26133e 0%,#0b0910 45%,#050507 100%);color:white;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}.card{width:min(680px,100%);padding:40px 28px;border-radius:18px;background:rgba(14,13,19,.96);border:1px solid #2b2535;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5)}.icon{font-size:40px;margin-bottom:14px}h1{color:#c9a8ff;font-size:24px;font-weight:900}p{color:#7a7085;margin:12px auto 22px;font-size:14px}.block{text-align:left;background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px 15px;margin-bottom:10px}.block-title{color:#6b6076;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px}.block-code{color:#b897ff;font-family:Consolas,monospace;font-size:13px;white-space:pre;overflow-x:auto;display:block}button{width:100%;margin-top:4px;border:0;border-radius:10px;padding:13px;background:#8051f5;color:white;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:6px}.note{margin-top:12px;color:#4e4558;font-size:12px}.draft-warn{background:#1a1000;border:1px solid #4a3000;border-radius:10px;padding:12px;color:#e0a030;font-size:13px;margin-bottom:16px}</style>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at top,#26133e 0%,#0b0910 45%,#050507 100%);color:white;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}.card{width:min(680px,100%);padding:40px 28px;border-radius:18px;background:rgba(14,13,19,.96);border:1px solid #2b2535;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5)}.icon{font-size:40px;margin-bottom:14px}h1{color:#c9a8ff;font-size:24px;font-weight:900}p{color:#7a7085;margin:12px auto 22px;font-size:14px}.block{text-align:left;background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px 15px;margin-bottom:10px}.block-title{color:#6b6076;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px}.block-code{color:#b897ff;font-family:Consolas,monospace;font-size:13px;white-space:pre;overflow-x:auto;display:block}button{width:100%;margin-top:4px;border:0;border-radius:10px;padding:13px;background:#8051f5;color:white;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:6px}.note{margin-top:12px;color:#4e4558;font-size:12px}.draft-warn{background:#1a1000;border:1px solid #4a3000;border-radius:10px;padding:12px;color:#e0a030;font-size:13px;margin-bottom:16px}.direct-badge{display:inline-block;background:#071a0d;border:1px solid #1a5a30;color:#7cdc9a;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:10px}</style>
 </head><body><div class="card">
-<div class="icon">${isPublished ? "🛡" : "📝"}</div>
+<div class="icon">${isActive ? (isDirect ? "⚡" : "🛡") : "📝"}</div>
 <h1>${escapeHtml(item.name)}</h1>
-${isPublished
-    ? `<p>Paste loader ini ke executor kamu.</p>
+${isActive
+    ? `${isDirect ? '<div class="direct-badge">⚡ Direct Script</div>' : ""}
+       <p>Paste loader ini ke executor kamu.</p>
        <div class="block"><div class="block-title">LOADER</div><div class="block-code">${escapeHtml(loaderFull)}</div></div>
        <button onclick="navigator.clipboard.writeText(${JSON.stringify(loaderFull)}).then(()=>this.textContent='✅ Copied!').catch(()=>{})">📋 Copy Loader</button>
        <div class="note">KXLuaprotect${scriptKey ? " — Script protected dengan key." : " — Script tanpa key protection."}</div>`
