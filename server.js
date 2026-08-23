@@ -485,11 +485,11 @@ body {
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 11px 14px;
+    gap: 10px;
+    padding: 9px 12px;
     border-radius: 10px;
     color: #7a7088;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: background .15s, color .15s;
@@ -510,7 +510,7 @@ body {
     border: 1px solid #3d2870;
 }
 
-.nav-icon { font-size: 17px; width: 20px; text-align: center; }
+.nav-icon { font-size: 15px; width: 18px; text-align: center; }
 
 .sidebar-user {
     padding: 16px;
@@ -822,7 +822,7 @@ tr:hover td { background: #13101e; }
             <span>Logs</span>
         </button>
 
-        <button class="nav-item" onclick="window.location.href='/'">
+        <button class="nav-item" onclick="showAdminPage('protector')">
             <span class="nav-icon">🛡</span>
             <span>Protector</span>
         </button>
@@ -983,6 +983,52 @@ tr:hover td { background: #13101e; }
             <div class="log-list" id="adminLogList">
                 <div class="empty">Loading...</div>
             </div>
+        </div>
+
+    </div>
+
+    <!-- ── PROTECTOR PAGE (ADMIN) ── -->
+    <div class="page" id="admin-page-protector">
+
+        <div class="page-header">
+            <div class="page-title">Protector</div>
+            <div class="page-sub">Protect script Luau kamu</div>
+        </div>
+
+        <div class="section">
+
+            <div style="margin-bottom:14px">
+                <div style="color:#5a5268;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Script Name</div>
+                <input class="search-input" id="adminScriptName" placeholder="e.g. MyHub, KXL_Duel..." style="width:100%">
+            </div>
+
+            <div style="margin-bottom:14px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                    <div style="color:#5a5268;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Source</div>
+                    <label style="display:inline-flex;align-items:center;gap:5px;background:#1a1430;border:1px solid #2a2040;color:#9070c0;font-size:12px;font-weight:700;padding:5px 11px;border-radius:8px;cursor:pointer">
+                        📁 Upload File
+                        <input type="file" id="adminFileUpload" accept=".lua,.txt" onchange="adminHandleUpload(this)" style="display:none">
+                    </label>
+                </div>
+                <textarea id="adminSource" spellcheck="false" placeholder="Paste Luau source di sini..." style="width:100%;height:300px;resize:vertical;background:#08080f;color:#e0d8ed;border:1px solid #2a2040;border-radius:12px;padding:15px;outline:none;font-family:Consolas,monospace;font-size:13px;line-height:1.55;transition:border-color .15s"></textarea>
+            </div>
+
+            <div style="display:flex;gap:10px">
+                <button onclick="adminProtect()" style="flex:1;background:linear-gradient(135deg,#8051f5,#5a2db5);border:0;border-radius:10px;padding:12px;color:white;font-weight:700;font-size:14px;cursor:pointer">🛡 Protect</button>
+                <button onclick="adminClear()" style="background:#1a1430;border:0;border-radius:10px;padding:12px 18px;color:#7a6a90;font-weight:700;font-size:14px;cursor:pointer">Clear</button>
+            </div>
+
+            <div id="adminResult" style="display:none;margin-top:20px">
+                <div style="color:#5a5268;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Loadstring</div>
+                <div id="adminLoadstring" style="background:#08080f;border:1px solid #2a2040;border-radius:12px;padding:14px;color:#b897ff;font-family:Consolas,monospace;font-size:13px;word-break:break-all"></div>
+                <div style="display:flex;gap:10px;margin-top:12px">
+                    <button onclick="adminCopyLoadstring()" style="background:#1a1430;border:0;border-radius:10px;padding:10px 16px;color:#c49dff;font-weight:700;font-size:13px;cursor:pointer">📋 Copy Loadstring</button>
+                    <button onclick="adminCopyUrl()" style="background:#1a1430;border:0;border-radius:10px;padding:10px 16px;color:#c49dff;font-weight:700;font-size:13px;cursor:pointer">🔗 Copy URL</button>
+                </div>
+            </div>
+
+            <div id="adminStatus" style="text-align:center;color:#4a4258;font-size:12px;margin-top:14px">Ready.</div>
+
         </div>
 
     </div>
@@ -1203,6 +1249,66 @@ function escHtml(v) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+}
+
+/* ── ADMIN PROTECTOR ── */
+
+let adminCurrentUrl = "";
+let adminCurrentLoadstring = "";
+
+function adminHandleUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById("adminSource").value = e.target.result;
+        document.getElementById("adminStatus").textContent = "File loaded: " + file.name;
+    };
+    reader.onerror = () => { document.getElementById("adminStatus").textContent = "Gagal membaca file."; };
+    reader.readAsText(file, "UTF-8");
+    input.value = "";
+}
+
+async function adminProtect() {
+    const source  = document.getElementById("adminSource").value;
+    const nameVal = document.getElementById("adminScriptName").value.trim();
+    const status  = document.getElementById("adminStatus");
+    if (!source.trim()) { status.textContent = "Paste Luau source dulu."; return; }
+    status.textContent = "Protecting...";
+    try {
+        const response = await fetch("/api/protect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source, name: nameVal || "Untitled Script" })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Protection failed.");
+        adminCurrentUrl = data.url;
+        adminCurrentLoadstring = data.loadstring;
+        document.getElementById("adminLoadstring").textContent = adminCurrentLoadstring;
+        document.getElementById("adminResult").style.display = "block";
+        status.textContent = "Protected successfully.";
+    } catch (error) { status.textContent = error.message; }
+}
+
+async function adminCopyLoadstring() {
+    if (!adminCurrentLoadstring) return;
+    await navigator.clipboard.writeText(adminCurrentLoadstring);
+    document.getElementById("adminStatus").textContent = "Loadstring copied.";
+}
+
+async function adminCopyUrl() {
+    if (!adminCurrentUrl) return;
+    await navigator.clipboard.writeText(adminCurrentUrl);
+    document.getElementById("adminStatus").textContent = "URL copied.";
+}
+
+function adminClear() {
+    document.getElementById("adminSource").value = "";
+    document.getElementById("adminScriptName").value = "";
+    document.getElementById("adminResult").style.display = "none";
+    document.getElementById("adminStatus").textContent = "Ready.";
+    adminCurrentUrl = ""; adminCurrentLoadstring = "";
 }
 
 </script>
