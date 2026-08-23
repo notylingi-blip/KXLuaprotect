@@ -124,6 +124,14 @@ function generateId() {
     return crypto.randomBytes(18).toString("hex");
 }
 
+function generateKey() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let key = "";
+    const bytes = crypto.randomBytes(32);
+    for (let i = 0; i < 32; i++) key += chars[bytes[i] % chars.length];
+    return key;
+}
+
 function protectLuau(source) {
     let code = String(source);
 
@@ -1615,10 +1623,14 @@ button:hover { filter: brightness(1.12); }
             <button class="btn-secondary" onclick="clearCode()">Clear</button>
         </div>
         <div class="result" id="result">
-            <div class="label">Loadstring</div>
+            <div class="key-box" style="display:none;margin-bottom:14px;background:#1a0f00;border:1px solid #5a3a00;border-radius:10px;padding:12px 14px">
+                <div class="label" style="color:#f0c060;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">🔑 Script Key — Jangan share ke orang lain!</div>
+                <div id="scriptKeyDisplay" style="font-family:Consolas,monospace;font-size:13px;color:#ffd580;word-break:break-all"></div>
+            </div>
+            <div class="label">Loader (script_key + loadstring)</div>
             <div class="resultBox" id="loadstring"></div>
             <div class="buttons">
-                <button class="btn-secondary" onclick="copyLoadstring()">📋 Copy Loadstring</button>
+                <button class="btn-secondary" onclick="copyLoadstring()">📋 Copy Loader</button>
                 <button class="btn-secondary" onclick="copyUrl()">🔗 Copy URL</button>
             </div>
         </div>
@@ -1635,7 +1647,7 @@ button:hover { filter: brightness(1.12); }
 <div class="footer">KXLuaprotect</div>
 </div>
 <script>
-let currentUrl = "", currentLoadstring = "";
+let currentUrl = "", currentLoadstring = "", currentKey = "";
 function showPage(name) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById("page-" + name).classList.add("active");
@@ -1674,9 +1686,12 @@ async function protectCode() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Protection failed.");
         currentUrl = data.url;
+        currentKey = data.key;
         currentLoadstring = data.loadstring;
         document.getElementById("loadstring").textContent = currentLoadstring;
         document.getElementById("result").style.display = "block";
+        const keyEl = document.getElementById("scriptKeyDisplay");
+        if (keyEl) { keyEl.textContent = currentKey; keyEl.closest(".key-box").style.display = "block"; }
         status.textContent = "Protected successfully.";
     } catch (error) { status.textContent = error.message; }
 }
@@ -1695,7 +1710,9 @@ function clearCode() {
     document.getElementById("scriptName").value = "";
     document.getElementById("result").style.display = "none";
     document.getElementById("status").textContent = "Ready.";
-    currentUrl = ""; currentLoadstring = "";
+    currentUrl = ""; currentLoadstring = ""; currentKey = "";
+    const keyEl = document.getElementById("scriptKeyDisplay");
+    if (keyEl) keyEl.closest(".key-box").style.display = "none";
 }
 function renderScripts() {
     const list = document.getElementById("scriptList");
@@ -1707,6 +1724,7 @@ function renderScripts() {
                 <div class="script-info">
                     <div class="script-name">\${escHtml(s.name)}</div>
                     <div class="script-meta">\${escHtml(s.url)}</div>
+                    \${s.key ? \`<div class="script-meta" style="color:#f0c060;margin-top:2px">🔑 \${escHtml(s.key)}</div>\` : ""}
                 </div>
                 <div class="script-actions">
                     <div class="toggle-wrap">
@@ -1762,12 +1780,15 @@ app.post("/api/protect", requireLogin, (req, res) => {
         const baseUrl         = `${req.protocol}://${req.get("host")}`;
         const url             = `${baseUrl}/files/loaders/${id}.lua`;
 
+        const scriptKey = generateKey();
+
         loaders.set(id, {
             name,
             source:        protectedSource,
             createdAt:     Date.now(),
             enabled:       true,
             url,
+            key:           scriptKey,
             ownerId:       req.session.user.id,
             ownerUsername: req.session.user.username,
         });
@@ -1775,7 +1796,8 @@ app.post("/api/protect", requireLogin, (req, res) => {
         saveToDisk(loaders);
         addLog("protect", req.session.user.id, req.session.user.username, "Protected: " + name);
 
-        res.json({ success: true, id, url, loadstring: `loadstring(game:HttpGet("${url}"))()` });
+        const loaderWithKey = `script_key = "${scriptKey}"\nloadstring(game:HttpGet("${url}"))()`;
+        res.json({ success: true, id, url, key: scriptKey, loadstring: loaderWithKey });
 
     } catch (error) {
         console.error(error);
@@ -1792,7 +1814,7 @@ app.get("/api/scripts", requireLogin, (req, res) => {
     const scripts = [];
     for (const [id, item] of loaders.entries()) {
         if (!user.isAdmin && item.ownerId !== user.id) continue;
-        scripts.push({ id, name: item.name, url: item.url, enabled: item.enabled, createdAt: item.createdAt, ownerUsername: item.ownerUsername || null });
+        scripts.push({ id, name: item.name, url: item.url, enabled: item.enabled, createdAt: item.createdAt, ownerUsername: item.ownerUsername || null, key: item.key || null });
     }
     scripts.sort((a, b) => b.createdAt - a.createdAt);
     res.json({ success: true, scripts });
@@ -1824,6 +1846,41 @@ app.delete("/api/scripts/:id", requireLogin, (req, res) => {
 });
 
 /* =================================================
+   KEY VALIDATION API
+   Dipanggil dari dalam Lua script:
+   HttpGet("/api/validate?id=SCRIPT_ID&key=USER_KEY")
+================================================= */
+
+app.get("/api/validate", (req, res) => {
+    const id  = req.query.id;
+    const key = req.query.key;
+
+    if (!id || !key) {
+        return res.status(400).type("text").send("invalid_request");
+    }
+
+    const item = loaders.get(id);
+
+    if (!item) {
+        return res.status(404).type("text").send("script_not_found");
+    }
+
+    if (!item.enabled) {
+        return res.status(403).type("text").send("script_disabled");
+    }
+
+    if (!item.key || item.key !== key) {
+        return res.status(403).type("text").send("invalid_key");
+    }
+
+    // Key valid — kirim source
+    res.status(200).type("text/plain")
+        .set("Cache-Control", "no-store, no-cache, must-revalidate")
+        .set("Pragma", "no-cache")
+        .send(item.source);
+});
+
+/* =================================================
    LOADER
 ================================================= */
 
@@ -1839,17 +1896,40 @@ app.get("/files/loaders/:id.lua", (req, res) => {
         (accept.includes("text/html") || accept.includes("application/xhtml+xml"));
 
     if (isBrowser) {
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const loader  = `loadstring(game:HttpGet("${baseUrl}/files/loaders/${id}.lua"))()`;
-        return res.status(403).type("html").send(`
+        const baseUrl      = `${req.protocol}://${req.get("host")}`;
+        const loaderUrl    = `${baseUrl}/files/loaders/${id}.lua`;
+        const scriptKey    = item.key || "(key not found)";
+        const loaderFull   = `script_key = "${scriptKey}"\nloadstring(game:HttpGet("${loaderUrl}"))()`;
+        return res.status(200).type("html").send(`
 <!DOCTYPE html><html><head><meta charset="UTF-8"><title>KXLuaprotect</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at top,#26133e 0%,#0b0910 45%,#050507 100%);color:white;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}.card{width:min(680px,100%);padding:40px 28px;border-radius:18px;background:rgba(14,13,19,.96);border:1px solid #2b2535;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5)}.icon{font-size:40px;margin-bottom:14px}h1{color:#c9a8ff;font-size:24px;font-weight:900}p{color:#7a7085;margin:12px auto 22px;font-size:14px}.loader{text-align:left;background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px 15px}.loader-title{color:#6b6076;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px}.loader-code{color:#b897ff;font-family:Consolas,monospace;font-size:13px;white-space:nowrap;overflow-x:auto;display:block}button{width:100%;margin-top:14px;border:0;border-radius:10px;padding:13px;background:#8051f5;color:white;font-weight:700;font-size:14px;cursor:pointer}.note{margin-top:16px;color:#4e4558;font-size:12px}</style>
-</head><body><div class="card"><div class="icon">🔒</div><h1>This script can't be viewed in a browser</h1><p>For security, the source is only delivered to Roblox at runtime.</p><div class="loader"><div class="loader-title">LOADER</div><div class="loader-code">${escapeHtml(loader)}</div></div><button onclick="navigator.clipboard.writeText(${JSON.stringify(loader)}).then(()=>this.textContent='✅ Copied!').catch(()=>{})">📋 Copy Loader</button><div class="note">Paste ini ke executor kamu.</div></div></body></html>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{min-height:100vh;background:radial-gradient(circle at top,#26133e 0%,#0b0910 45%,#050507 100%);color:white;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}.card{width:min(680px,100%);padding:40px 28px;border-radius:18px;background:rgba(14,13,19,.96);border:1px solid #2b2535;text-align:center;box-shadow:0 25px 80px rgba(0,0,0,.5)}.icon{font-size:40px;margin-bottom:14px}h1{color:#c9a8ff;font-size:24px;font-weight:900}p{color:#7a7085;margin:12px auto 22px;font-size:14px}.block{text-align:left;background:#08080c;border:1px solid #302a39;border-radius:12px;padding:14px 15px;margin-bottom:10px}.block-title{color:#6b6076;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px}.block-code{color:#b897ff;font-family:Consolas,monospace;font-size:13px;white-space:pre;overflow-x:auto;display:block}button{width:100%;margin-top:4px;border:0;border-radius:10px;padding:13px;background:#8051f5;color:white;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:6px}.note{margin-top:12px;color:#4e4558;font-size:12px}.key-val{color:#f0c060;font-family:Consolas,monospace;font-size:13px;word-break:break-all}</style>
+</head><body><div class="card"><div class="icon">🔑</div><h1>${escapeHtml(item.name)}</h1><p>Paste loader ini ke executor kamu. Jangan share key ke orang lain!</p>
+<div class="block"><div class="block-title">KEY</div><div class="block-code key-val">${escapeHtml(scriptKey)}</div></div>
+<div class="block"><div class="block-title">LOADER</div><div class="block-code">${escapeHtml(loaderFull)}</div></div>
+<button onclick="navigator.clipboard.writeText(${JSON.stringify(loaderFull)}).then(()=>this.textContent='✅ Copied!').catch(()=>{})">📋 Copy Full Loader</button>
+<div class="note">KXLuaprotect — Script disabled = key tidak akan berfungsi.</div></div></body></html>
         `);
     }
 
     if (!item.enabled) {
         return res.status(403).type("text").send("-- KXLuaprotect: This script is currently disabled.\nerror('Script disabled by owner.')");
+    }
+
+    // Executor request — validasi key dari global variable
+    // Key dikirim via query param: ?key=XXXXX
+    const providedKey = req.query.key;
+
+    if (item.key) {
+        if (!providedKey) {
+            return res.status(403).type("text").send(
+                "-- KXLuaprotect: Key required.\nerror('Invalid key. Set script_key before loading.')"
+            );
+        }
+        if (providedKey !== item.key) {
+            return res.status(403).type("text").send(
+                "-- KXLuaprotect: Invalid key.\nerror('Invalid key.')"
+            );
+        }
     }
 
     res.status(200).type("text/plain")
